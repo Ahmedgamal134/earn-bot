@@ -263,6 +263,49 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
+async def watch_google_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """مشاهدة إعلان جوجل"""
+    user_id = update.effective_user.id
+    
+    # الرابط الجديد بتاع موقع الإعلانات
+    ads_url = "https://adssite-production.up.railway.app"
+    
+    keyboard = [[InlineKeyboardButton("📺 شاهد الإعلان", url=ads_url)]]
+    await update.message.reply_text(
+        "📺 **مشاهدة إعلان والربح**\n\n"
+        "1. اضغط على الرابط\n"
+        "2. شاهد الإعلان (أي إعلان يظهر)\n"
+        "3. انتظر 15 ثانية\n"
+        "4. ارجع هنا واكتب /claim\n\n"
+        "✅ هتاخد نقطتك بعد المشاهدة",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    context.user_data['awaiting_claim'] = True
+
+async def claim_points(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """استلام النقاط بعد المشاهدة"""
+    user_id = update.effective_user.id
+    
+    if not context.user_data.get('awaiting_claim'):
+        await update.message.reply_text("❌ اضغط على /ad أولاً")
+        return
+    
+    ads_today = get_ads_today(user_id)
+    if ads_today >= 400:
+        await update.message.reply_text("❌ انتهت إعلانات اليوم")
+        return
+    
+    add_ad_watch(user_id)
+    new_points = update_points(user_id, 1)
+    
+    await update.message.reply_text(
+        f"✅ تمت الإضافة! +1 نقطة\n💰 رصيدك: {new_points} نقطة"
+    )
+    
+    context.user_data['awaiting_claim'] = False
+
 async def watch_ad_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """بدء مشاهدة إعلان"""
     query = update.callback_query
@@ -902,6 +945,8 @@ def main():
     
     # إضافة المعالجات
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("ad", watch_google_ad))
+    app.add_handler(CommandHandler("claim", claim_points))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
