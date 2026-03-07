@@ -12,7 +12,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 # التوكن من المتغيرات البيئية
 TOKEN = os.environ.get('BOT_TOKEN')
-ADMIN_IDS = [1103784347]  # ⚠️ غير الرقم ده لمعرفك من @userinfobot
+ADMIN_IDS = [123456789]  # ⚠️ غير الرقم ده لمعرفك من @userinfobot
 
 # =========== قاعدة البيانات ===========
 def init_db():
@@ -118,15 +118,20 @@ def create_user(user_id, username, first_name, referrer_id=None):
 
 def update_points(user_id, points_to_add):
     """إضافة نقاط للمستخدم"""
-    conn = sqlite3.connect('profit_bot.db')
-    c = conn.cursor()
-    c.execute("UPDATE users SET points = points + ?, total_earned = total_earned + ? WHERE user_id=?", 
-              (points_to_add, points_to_add, user_id))
-    c.execute("SELECT points FROM users WHERE user_id=?", (user_id,))
-    new_points = c.fetchone()[0]
-    conn.commit()
-    conn.close()
-    return new_points
+    try:
+        conn = sqlite3.connect('profit_bot.db')
+        c = conn.cursor()
+        c.execute("UPDATE users SET points = points + ?, total_earned = total_earned + ? WHERE user_id=?", 
+                  (points_to_add, points_to_add, user_id))
+        c.execute("SELECT points FROM users WHERE user_id=?", (user_id,))
+        new_points = c.fetchone()[0]
+        conn.commit()
+        conn.close()
+        print(f"✅ تم إضافة {points_to_add} نقاط للمستخدم {user_id}. الرصيد الجديد: {new_points}")
+        return new_points
+    except Exception as e:
+        print(f"❌ خطأ في إضافة النقاط: {e}")
+        return 0
 
 def get_ads_today(user_id):
     """جلب عدد الإعلانات اللي شاهدها المستخدم اليوم"""
@@ -140,20 +145,26 @@ def get_ads_today(user_id):
 
 def add_ad_watch(user_id):
     """تسجيل مشاهدة إعلان"""
-    conn = sqlite3.connect('profit_bot.db')
-    c = conn.cursor()
-    today = datetime.now().strftime('%Y-%m-%d')
-    
-    c.execute("SELECT ad_count FROM ads WHERE user_id=? AND ad_date=?", (user_id, today))
-    result = c.fetchone()
-    
-    if not result:
-        c.execute("INSERT INTO ads (user_id, ad_date, ad_count) VALUES (?, ?, ?)", (user_id, today, 1))
-    else:
-        c.execute("UPDATE ads SET ad_count = ad_count + 1 WHERE user_id=? AND ad_date=?", (user_id, today))
-    
-    conn.commit()
-    conn.close()
+    try:
+        conn = sqlite3.connect('profit_bot.db')
+        c = conn.cursor()
+        today = datetime.now().strftime('%Y-%m-%d')
+        
+        c.execute("SELECT ad_count FROM ads WHERE user_id=? AND ad_date=?", (user_id, today))
+        result = c.fetchone()
+        
+        if not result:
+            c.execute("INSERT INTO ads (user_id, ad_date, ad_count) VALUES (?, ?, ?)", (user_id, today, 1))
+        else:
+            c.execute("UPDATE ads SET ad_count = ad_count + 1 WHERE user_id=? AND ad_date=?", (user_id, today))
+        
+        conn.commit()
+        conn.close()
+        print(f"✅ تم تسجيل مشاهدة إعلان للمستخدم {user_id}")
+        return True
+    except Exception as e:
+        print(f"❌ خطأ في تسجيل المشاهدة: {e}")
+        return False
 
 def can_checkin(user_id):
     """التحقق من إمكانية تسجيل الدخول اليومي"""
@@ -349,28 +360,37 @@ async def ad_watched(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    add_ad_watch(user_id)
-    new_points = update_points(user_id, 1)
-    ads_today += 1
-    ads_left = 400 - ads_today
-    
-    # حذف الإعلان الحالي من context
-    del context.user_data['current_ad']
-    
-    keyboard = [
-        [InlineKeyboardButton("📺 إعلان آخر", callback_data='watch_ad')],
-        [InlineKeyboardButton("🔙 القائمة", callback_data='main_menu')]
-    ]
-    
-    await query.edit_message_text(
-        f"✅ **تمت المشاهدة بنجاح!**\n\n"
-        f"🎁 +1 نقطة\n"
-        f"💰 رصيدك: {new_points} نقطة\n"
-        f"📊 إعلانات اليوم: {ads_today}/400\n"
-        f"⏳ تبقي {ads_left} إعلان",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
+    # تسجيل المشاهدة وإضافة النقاط
+    success = add_ad_watch(user_id)
+    if success:
+        new_points = update_points(user_id, 1)
+        ads_today += 1
+        ads_left = 400 - ads_today
+        
+        # حذف الإعلان الحالي من context
+        del context.user_data['current_ad']
+        
+        keyboard = [
+            [InlineKeyboardButton("📺 إعلان آخر", callback_data='watch_ad')],
+            [InlineKeyboardButton("🔙 القائمة", callback_data='main_menu')]
+        ]
+        
+        await query.edit_message_text(
+            f"✅ **تمت المشاهدة بنجاح!**\n\n"
+            f"🎁 +1 نقطة\n"
+            f"💰 رصيدك: {new_points} نقطة\n"
+            f"📊 إعلانات اليوم: {ads_today}/400\n"
+            f"⏳ تبقي {ads_left} إعلان",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    else:
+        await query.edit_message_text(
+            "❌ حدث خطأ في تسجيل المشاهدة، حاول مرة أخرى",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 القائمة", callback_data='main_menu')
+            ]])
+        )
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """معالج الأزرار الرئيسي"""
