@@ -12,16 +12,13 @@ def get_user_data(user_id):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
-    # جلب بيانات المستخدم
     c.execute("SELECT points, total_earned FROM users WHERE user_id=?", (user_id,))
     user = c.fetchone()
     
-    # جلب إعلانات اليوم
     today = datetime.now().strftime('%Y-%m-%d')
     c.execute("SELECT ad_count FROM ads WHERE user_id=? AND ad_date=?", (user_id, today))
     ads = c.fetchone()
     
-    # جلب سلسلة التسجيل
     c.execute("SELECT streak FROM daily_checkin WHERE user_id=? ORDER BY check_date DESC LIMIT 1", (user_id,))
     streak = c.fetchone()
     
@@ -48,7 +45,6 @@ def watch_ad(user_id):
     
     today = datetime.now().strftime('%Y-%m-%d')
     
-    # التحقق من عدد الإعلانات
     c.execute("SELECT ad_count FROM ads WHERE user_id=? AND ad_date=?", (user_id, today))
     result = c.fetchone()
     
@@ -56,20 +52,15 @@ def watch_ad(user_id):
         conn.close()
         return jsonify({'error': 'Daily limit reached', 'success': False}), 400
     
-    # تسجيل المشاهدة
     if not result:
         c.execute("INSERT INTO ads (user_id, ad_date, ad_count) VALUES (?, ?, ?)", (user_id, today, 1))
     else:
         c.execute("UPDATE ads SET ad_count = ad_count + 1 WHERE user_id=? AND ad_date=?", (user_id, today))
     
-    # إضافة النقاط
     c.execute("UPDATE users SET points = points + 1, total_earned = total_earned + 1 WHERE user_id=?", (user_id,))
-    
-    # جلب الرصيد الجديد
     c.execute("SELECT points FROM users WHERE user_id=?", (user_id,))
     new_points = c.fetchone()[0]
     
-    # جلب عدد الإعلانات الجديد
     c.execute("SELECT ad_count FROM ads WHERE user_id=? AND ad_date=?", (user_id, today))
     new_ads = c.fetchone()[0]
     
