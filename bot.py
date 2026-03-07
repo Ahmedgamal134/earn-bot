@@ -12,7 +12,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 # التوكن من المتغيرات البيئية
 TOKEN = os.environ.get('BOT_TOKEN')
-ADMIN_IDS = [123456789]  # ⚠️ غير الرقم ده لمعرفك من @userinfobot
+ADMIN_IDS = [1103784347]  # ⚠️ غير الرقم ده لمعرفك من @userinfobot
 
 # =========== قاعدة البيانات ===========
 def init_db():
