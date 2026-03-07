@@ -12,7 +12,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 # التوكن من المتغيرات البيئية
 TOKEN = os.environ.get('BOT_TOKEN')
-ADMIN_IDS = [1103784347]  # ⚠️ غير الرقم ده لمعرفك من @userinfobot
+ADMIN_IDS = [123456789]  # ⚠️ غير الرقم ده لمعرفك من @userinfobot
 
 # =========== قاعدة البيانات ===========
 def init_db():
@@ -64,7 +64,7 @@ def init_db():
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   ad_text TEXT,
                   ad_link TEXT,
-                  ad_type TEXT DEFAULT 'text',  -- text, video, channel
+                  ad_type TEXT DEFAULT 'text',
                   is_active INTEGER DEFAULT 1)''')
     
     # إضافة بعض الإعلانات الافتراضية
@@ -227,10 +227,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     points = get_user_points(user_id)
     ads_today = get_ads_today(user_id)
     
-    # زر Mini App
+    # زر Mini App (تم تعديل الرابط هنا ✅)
     web_app_button = InlineKeyboardButton(
         "🚀 فتح التطبيق المصغر", 
-        web_app=WebAppInfo(url="https://ahmedgaml134.github.io/mini-app/")
+        web_app=WebAppInfo(url="https://ahmedgamal134.github.io/mini-app/")
     )
     
     keyboard = [
@@ -641,9 +641,10 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     points = get_user_points(user_id)
     ads_today = get_ads_today(user_id)
     
+    # زر Mini App (تم تعديل الرابط هنا ✅)
     web_app_button = InlineKeyboardButton(
         "🚀 فتح التطبيق المصغر", 
-        web_app=WebAppInfo(url="https://ahmedgaml134.github.io/mini-app/")
+        web_app=WebAppInfo(url="https://ahmedgamal134.github.io/mini-app/")
     )
     
     keyboard = [
