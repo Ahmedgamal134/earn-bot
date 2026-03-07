@@ -205,13 +205,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
          InlineKeyboardButton("💳 سحب أرباح", callback_data='withdraw')],
         [InlineKeyboardButton("📊 الإحصائيات", callback_data='stats')]
     ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
     
     await update.message.reply_text(
         f"🎉 أهلاً بك في **بوت الربح الذكي** يا {first_name}!\n\n"
         f"📊 إعلانات اليوم: {ads_today}/400\n"
         f"💰 رصيدك: {points} نقطة\n\n"
         "اختر من القائمة 👇",
-        reply_markup=InlineKeyboardMarkup(keyboard),
+        reply_markup=reply_markup,
         parse_mode='Markdown'
     )
 
