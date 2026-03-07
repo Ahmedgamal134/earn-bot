@@ -3,7 +3,7 @@ import sqlite3
 from datetime import datetime, timedelta
 import os
 import random
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
 # إعداد التسجيل
@@ -11,6 +11,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 # التوكن من المتغيرات البيئية
 TOKEN = os.environ.get('BOT_TOKEN')
+ADMIN_IDS = [123456789]  # ضع معرفك هنا (خذها من @userinfobot)
 
 # =========== قاعدة البيانات ===========
 def init_db():
@@ -29,7 +30,8 @@ def init_db():
                   referrer_id INTEGER DEFAULT NULL,
                   total_referrals INTEGER DEFAULT 0,
                   referral_earned INTEGER DEFAULT 0,
-                  phone_number TEXT DEFAULT NULL)''')
+                  phone_number TEXT DEFAULT NULL,
+                  is_admin INTEGER DEFAULT 0)''')
     
     # جدول الإعلانات
     c.execute('''CREATE TABLE IF NOT EXISTS ads
@@ -55,6 +57,23 @@ def init_db():
                   status TEXT DEFAULT 'قيد الانتظار',
                   request_date TEXT,
                   process_date TEXT DEFAULT NULL)''')
+    
+    # جدول الإعلانات النصية (اللي هتظهر للمستخدمين)
+    c.execute('''CREATE TABLE IF NOT EXISTS ads_content
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  ad_text TEXT,
+                  ad_link TEXT,
+                  is_active INTEGER DEFAULT 1)''')
+    
+    # إضافة بعض الإعلانات الافتراضية
+    c.execute("SELECT COUNT(*) FROM ads_content")
+    if c.fetchone()[0] == 0:
+        c.execute('''INSERT INTO ads_content (ad_text, ad_link) VALUES
+                     ('اشترك في قناتنا', 'https://t.me/your_channel'),
+                     ('حمّل تطبيقنا', 'https://play.google.com'),
+                     ('تابعنا على فيسبوك', 'https://facebook.com'),
+                     ('شاهد فيديو جديد', 'https://youtube.com'),
+                     ('عروض اليوم', 'https://example.com')''')
     
     conn.commit()
     conn.close()
@@ -177,6 +196,17 @@ def get_total_users():
     conn.close()
     return count
 
+def get_random_ad():
+    """جلب إعلان عشوائي من قاعدة البيانات"""
+    conn = sqlite3.connect('profit_bot.db')
+    c = conn.cursor()
+    c.execute("SELECT ad_text, ad_link FROM ads_content WHERE is_active=1 ORDER BY RANDOM() LIMIT 1")
+    ad = c.fetchone()
+    conn.close()
+    if ad:
+        return f"🔹 {ad[0]}\n{ad[1]}"
+    return "🔹 اشترك في قناتنا على التليجرام"
+
 # =========== أوامر البوت ===========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """أمر /start"""
@@ -197,7 +227,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     points = get_user_points(user_id)
     ads_today = get_ads_today(user_id)
     
+    # زر Mini App
+    web_app_button = InlineKeyboardButton(
+        "🚀 فتح التطبيق المصغر", 
+        web_app=WebAppInfo(url="https://ahmedgaml134.github.io/mini-app")  # غير الرابط ده
+    )
+    
     keyboard = [
+        [web_app_button],
         [InlineKeyboardButton("📺 مشاهدة إعلان", callback_data='watch_ad')],
         [InlineKeyboardButton("✅ تسجيل يومي", callback_data='daily_checkin'),
          InlineKeyboardButton("💰 رصيدي", callback_data='balance')],
@@ -205,6 +242,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
          InlineKeyboardButton("💳 سحب أرباح", callback_data='withdraw')],
         [InlineKeyboardButton("📊 الإحصائيات", callback_data='stats')]
     ]
+    
+    # لو المستخدم أدمن، ضيف زر التحكم
+    if user_id in ADMIN_IDS:
+        keyboard.append([InlineKeyboardButton("⚙️ لوحة التحكم", callback_data='admin_panel')])
+    
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await update.message.reply_text(
@@ -245,15 +287,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         ads_left = 400 - ads_today
         
-        # محاكاة إعلان
-        ad_messages = [
-            "🔹 اشترك في قناتنا على التليجرام",
-            "🔸 حمل تطبيقنا الجديد",
-            "🔹 تابعنا على فيسبوك",
-            "🔸 شاهد هذا الفيديو الرائع",
-            "🔹 اكتشف عروض اليوم"
-        ]
-        random_ad = random.choice(ad_messages)
+        # جلب إعلان عشوائي من قاعدة البيانات
+        ad_text = get_random_ad()
         
         keyboard = [
             [InlineKeyboardButton("📺 إعلان تاني", callback_data='watch_ad')],
@@ -262,7 +297,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await query.edit_message_text(
             f"📺 **مشاهدة إعلان**\n\n"
-            f"{random_ad}\n\n"
+            f"{ad_text}\n\n"
             f"✅ تمت المشاهدة! +1 نقطة\n"
             f"📊 إعلانات اليوم: {ads_today}/400\n"
             f"💰 الرصيد: {new_points} نقطة\n"
@@ -472,7 +507,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         points = get_user_points(user_id)
         ads_today = get_ads_today(user_id)
         
+        web_app_button = InlineKeyboardButton(
+            "🚀 فتح التطبيق المصغر", 
+            web_app=WebAppInfo(url="https://ahmedgaml134.github.io/mini-app")  # غير الرابط ده
+        )
+        
         keyboard = [
+            [web_app_button],
             [InlineKeyboardButton("📺 مشاهدة إعلان", callback_data='watch_ad')],
             [InlineKeyboardButton("✅ تسجيل يومي", callback_data='daily_checkin'),
              InlineKeyboardButton("💰 رصيدي", callback_data='balance')],
@@ -481,6 +522,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("📊 الإحصائيات", callback_data='stats')]
         ]
         
+        if user_id in ADMIN_IDS:
+            keyboard.append([InlineKeyboardButton("⚙️ لوحة التحكم", callback_data='admin_panel')])
+        
         await query.edit_message_text(
             f"🎯 **القائمة الرئيسية**\n\n"
             f"📊 إعلانات اليوم: {ads_today}/400\n"
@@ -488,25 +532,167 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode='Markdown'
         )
+    
+    # =========== أوامر الأدمن ===========
+    elif data == 'admin_panel' and user_id in ADMIN_IDS:
+        keyboard = [
+            [InlineKeyboardButton("📊 إحصائيات عامة", callback_data='admin_stats')],
+            [InlineKeyboardButton("👥 عرض المستخدمين", callback_data='admin_users')],
+            [InlineKeyboardButton("💳 طلبات السحب", callback_data='admin_withdrawals')],
+            [InlineKeyboardButton("📢 إدارة الإعلانات", callback_data='admin_ads')],
+            [InlineKeyboardButton("📨 إرسال رسالة للكل", callback_data='admin_broadcast')],
+            [InlineKeyboardButton("🔙 رجوع", callback_data='main_menu')]
+        ]
+        
+        await query.edit_message_text(
+            "⚙️ **لوحة تحكم الأدمن**\n"
+            "اختر ما تريد:",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    
+    elif data == 'admin_stats' and user_id in ADMIN_IDS:
+        conn = sqlite3.connect('profit_bot.db')
+        c = conn.cursor()
+        
+        c.execute("SELECT COUNT(*) FROM users")
+        total_users = c.fetchone()[0]
+        
+        c.execute("SELECT SUM(points) FROM users")
+        total_points = c.fetchone()[0] or 0
+        
+        c.execute("SELECT SUM(total_earned) FROM users")
+        total_earned = c.fetchone()[0] or 0
+        
+        c.execute("SELECT COUNT(*) FROM withdrawals WHERE status='قيد الانتظار'")
+        pending_withdrawals = c.fetchone()[0]
+        
+        today = datetime.now().strftime('%Y-%m-%d')
+        c.execute("SELECT COUNT(DISTINCT user_id) FROM ads WHERE ad_date=?", (today,))
+        active_today = c.fetchone()[0]
+        
+        conn.close()
+        
+        text = (
+            f"📊 **إحصائيات عامة**\n\n"
+            f"👥 إجمالي المستخدمين: {total_users}\n"
+            f"💰 إجمالي النقاط: {total_points}\n"
+            f"💵 إجمالي الأرباح: {total_earned} نقطة\n"
+            f"⏳ طلبات سحب معلقة: {pending_withdrawals}\n"
+            f"📱 نشطاء اليوم: {active_today}"
+        )
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 رجوع", callback_data='admin_panel')
+            ]]),
+            parse_mode='Markdown'
+        )
+    
+    elif data == 'admin_users' and user_id in ADMIN_IDS:
+        conn = sqlite3.connect('profit_bot.db')
+        c = conn.cursor()
+        c.execute('''SELECT user_id, first_name, points, total_referrals 
+                     FROM users ORDER BY points DESC LIMIT 10''')
+        users = c.fetchall()
+        conn.close()
+        
+        text = "👥 **أكثر 10 مستخدمين نقاطاً:**\n\n"
+        for i, u in enumerate(users, 1):
+            text += f"{i}. {u[1]} - {u[2]} نقطة - {u[3]} دعوات\n"
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 رجوع", callback_data='admin_panel')
+            ]]),
+            parse_mode='Markdown'
+        )
+    
+    elif data == 'admin_withdrawals' and user_id in ADMIN_IDS:
+        conn = sqlite3.connect('profit_bot.db')
+        c = conn.cursor()
+        c.execute('''SELECT * FROM withdrawals WHERE status="قيد الانتظار" ORDER BY request_date''')
+        withdrawals = c.fetchall()
+        conn.close()
+        
+        if not withdrawals:
+            text = "✅ لا توجد طلبات سحب معلقة"
+        else:
+            text = "💳 **طلبات السحب المعلقة:**\n\n"
+            for w in withdrawals:
+                text += f"🆔 #{w[0]}\n"
+                text += f"👤 مستخدم: {w[1]}\n"
+                text += f"💰 المبلغ: {w[3]} جنيه\n"
+                text += f"💳 المحفظة: {w[4]}\n"
+                text += f"📱 الرقم: {w[5]}\n"
+                text += f"📅 التاريخ: {w[7][:16]}\n"
+                text += "-" * 20 + "\n"
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 رجوع", callback_data='admin_panel')
+            ]]),
+            parse_mode='Markdown'
+        )
+    
+    elif data == 'admin_ads' and user_id in ADMIN_IDS:
+        conn = sqlite3.connect('profit_bot.db')
+        c = conn.cursor()
+        c.execute("SELECT id, ad_text, ad_link, is_active FROM ads_content")
+        ads = c.fetchall()
+        conn.close()
+        
+        text = "📢 **إدارة الإعلانات**\n\n"
+        for ad in ads:
+            status = "✅ نشط" if ad[3] else "❌ غير نشط"
+            text += f"🆔 {ad[0]}: {ad[1]}\n{ad[2]}\nالحالة: {status}\n\n"
+        
+        keyboard = [
+            [InlineKeyboardButton("➕ إضافة إعلان", callback_data='admin_add_ad')],
+            [InlineKeyboardButton("🔙 رجوع", callback_data='admin_panel')]
+        ]
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    
+    elif data == 'admin_add_ad' and user_id in ADMIN_IDS:
+        context.user_data['adding_ad'] = True
+        await query.edit_message_text(
+            "📝 أرسل الإعلان الجديد بالصيغة:\n"
+            "عنوان الإعلان\n"
+            "رابط الإعلان\n\n"
+            "مثال:\n"
+            "اشترك في قناتنا\n"
+            "https://t.me/your_channel",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 إلغاء", callback_data='admin_ads')
+            ]])
+        )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """معالجة الرسائل النصية (لأرقام المحافظ)"""
+    """معالجة الرسائل النصية"""
+    user_id = update.effective_user.id
+    text = update.message.text
+    
+    # استقبال رقم المحفظة
     if context.user_data.get('awaiting_wallet'):
-        wallet_number = update.message.text.strip()
+        wallet_number = text.strip()
         user_id = update.effective_user.id
         wallet_type = context.user_data.get('wallet_type', 'محفظة')
         
-        # حفظ طلب السحب
         conn = sqlite3.connect('profit_bot.db')
         c = conn.cursor()
         c.execute('''INSERT INTO withdrawals 
                      (user_id, amount, wallet_type, wallet_number, request_date) 
                      VALUES (?, ?, ?, ?, ?)''',
                   (user_id, 600, wallet_type, wallet_number, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
-        
-        # خصم النقاط
         c.execute("UPDATE users SET points = points - 150000 WHERE user_id=?", (user_id,))
-        
         conn.commit()
         conn.close()
         
@@ -520,6 +706,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"سيتم مراجعة الطلب وإرسال المبلغ خلال 24 ساعة ⏳",
             parse_mode='Markdown'
         )
+    
+    # استقبال إعلان جديد من الأدمن
+    elif context.user_data.get('adding_ad') and user_id in ADMIN_IDS:
+        lines = text.strip().split('\n')
+        if len(lines) >= 2:
+            ad_text = lines[0]
+            ad_link = lines[1]
+            
+            conn = sqlite3.connect('profit_bot.db')
+            c = conn.cursor()
+            c.execute("INSERT INTO ads_content (ad_text, ad_link) VALUES (?, ?)", (ad_text, ad_link))
+            conn.commit()
+            conn.close()
+            
+            context.user_data['adding_ad'] = False
+            await update.message.reply_text("✅ تم إضافة الإعلان بنجاح!")
+        else:
+            await update.message.reply_text("❌ صيغة خاطئة! أرسل عنوان الإعلان然后在 سطر جديد الرابط")
+    
     else:
         await update.message.reply_text("استخدم الأزرار للتحكم في البوت")
 
@@ -538,12 +743,18 @@ def main():
     
     # إضافة المعالجات
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("admin", admin_panel))  # أمر سريع للوحة التحكم
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     # تشغيل البوت
     print("✅ البوت يعمل بنجاح...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
+
+async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """أمر سريع للوحة التحكم"""
+    if update.effective_user.id in ADMIN_IDS:
+        await button_handler(update, context)
 
 if __name__ == '__main__':
     main()
