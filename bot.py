@@ -227,10 +227,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     points = get_user_points(user_id)
     ads_today = get_ads_today(user_id)
     
-    # زر Mini App (تم تعديل الرابط هنا ✅)
+    # زر Mini App بالرابط الجديد
     web_app_button = InlineKeyboardButton(
         "🚀 فتح التطبيق المصغر", 
-        web_app=WebAppInfo(url="https://ahmedgamal134.github.io/mini-app/")
+        web_app=WebAppInfo(url="https://mini-app-production-1706.up.railway.app")
     )
     
     keyboard = [
@@ -641,10 +641,10 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     points = get_user_points(user_id)
     ads_today = get_ads_today(user_id)
     
-    # زر Mini App (تم تعديل الرابط هنا ✅)
+    # زر Mini App بالرابط الجديد
     web_app_button = InlineKeyboardButton(
         "🚀 فتح التطبيق المصغر", 
-        web_app=WebAppInfo(url="https://ahmedgamal134.github.io/mini-app/")
+        web_app=WebAppInfo(url="https://mini-app-production-1706.up.railway.app")
     )
     
     keyboard = [
