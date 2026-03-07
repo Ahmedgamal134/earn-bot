@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini App - بوت الربح</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            font-size: 28px;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        .stat-item {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 15px;
+            padding: 15px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+        .btn {
+            background: white;
+            color: #764ba2;
+            border: none;
+            border-radius: 30px;
+            padding: 15px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        .btn:hover {
+            transform: scale(1.05);
+        }
+        .btn:active {
+            transform: scale(0.95);
+        }
+        .progress-bar {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 30px;
+            height: 20px;
+            overflow: hidden;
+            margin: 15px 0;
+        }
+        .progress-fill {
+            background: linear-gradient(90deg, #ffd700, #ffa500);
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        .wallet-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .wallet-btn {
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 15px;
+            padding: 15px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .notification {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #4caf50;
+            color: white;
+            padding: 15px 30px;
+            border-radius: 30px;
+            display: none;
+            animation: slideDown 0.3s;
+        }
+        @keyframes slideDown {
+            from { transform: translate(-50%, -100%); opacity: 0; }
+            to { transform: translate(-50%, 0); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💰 بوت الربح الذكي</h1>
+        
+        <div class="card">
+            <div class="stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="points">0</div>
+                    <div class="stat-label">نقاطك</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="adsToday">0</div>
+                    <div class="stat-label">إعلانات اليوم</div>
+                </div>
+            </div>
+            
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress" style="width: 0%"></div>
+            </div>
+            <div style="text-align: center; margin-top: 10px;" id="progressText">
+                0/400 إعلان
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2 style="text-align: center;">📺 مشاهدة إعلان</h2>
+            <button class="btn" onclick="watchAd()">شاهد إعلان الآن</button>
+            <p style="text-align: center; font-size: 14px;" id="adsLeft">تبقى 400 إعلان اليوم</p>
+        </div>
+        
+        <div class="card">
+            <h2 style="text-align: center;">✅ تسجيل يومي</h2>
+            <button class="btn" onclick="dailyCheckin()">سجل حضورك</button>
+            <p style="text-align: center; font-size: 14px;" id="streakInfo">سلسلة التسجيل: 0 أيام</p>
+        </div>
+        
+        <div class="card">
+            <h2 style="text-align: center;">💳 سحب أرباح</h2>
+            <p style="text-align: center;">رصيدك: <span id="withdrawPoints">0</span> نقطة = <span id="egpValue">0</span> جنيه</p>
+            <div class="wallet-grid">
+                <button class="wallet-btn" onclick="withdraw('vodafone')">📱 فودافون كاش</button>
+                <button class="wallet-btn" onclick="withdraw('orange')">🟠 أورانج كاش</button>
+                <button class="wallet-btn" onclick="withdraw('etisalat')">📞 اتصالات كاش</button>
+                <button class="wallet-btn" onclick="withdraw('we')">💳 وي كاش</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="notification" id="notification"></div>
+    
+    <script>
+        let tg = window.Telegram.WebApp;
+        tg.expand();
+        tg.ready();
+        
+        // بيانات افتراضية (هنربطها مع البوت بعدين)
+        let userData = {
+            points: 1250,
+            adsToday: 1,
+            streak: 5,
+            totalAds: 400
+        };
+        
+        function updateUI() {
+            document.getElementById('points').textContent = userData.points;
+            document.getElementById('adsToday').textContent = userData.adsToday;
+            
+            let percent = (userData.adsToday / userData.totalAds) * 100;
+            document.getElementById('progress').style.width = percent + '%';
+            document.getElementById('progressText').textContent = 
+                `${userData.adsToday}/${userData.totalAds} إعلان`;
+            
+            let adsLeft = userData.totalAds - userData.adsToday;
+            document.getElementById('adsLeft').textContent = `تبقى ${adsLeft} إعلان اليوم`;
+            
+            document.getElementById('streakInfo').textContent = `سلسلة التسجيل: ${userData.streak} أيام`;
+            
+            let egpValue = (userData.points / 150000) * 600;
+            document.getElementById('withdrawPoints').textContent = userData.points;
+            document.getElementById('egpValue').textContent = egpValue.toFixed(2);
+        }
+        
+        function showNotification(message, isSuccess = true) {
+            let notification = document.getElementById('notification');
+            notification.style.backgroundColor = isSuccess ? '#4caf50' : '#f44336';
+            notification.textContent = message;
+            notification.style.display = 'block';
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 3000);
+        }
+        
+        function watchAd() {
+            if (userData.adsToday >= userData.totalAds) {
+                showNotification('❌ انتهت إعلانات اليوم! تعال بكرة', false);
+                return;
+            }
+            
+            userData.adsToday++;
+            userData.points++;
+            updateUI();
+            
+            tg.sendData(JSON.stringify({
+                action: 'watch_ad',
+                success: true
+            }));
+            
+            showNotification('✅ +1 نقطة! استمر في المشاهدة');
+        }
+        
+        function dailyCheckin() {
+            userData.streak++;
+            let bonus = userData.streak == 7 ? 20 : (userData.streak == 30 ? 100 : 5);
+            userData.points += bonus;
+            updateUI();
+            
+            showNotification(`✅ تم التسجيل! +${bonus} نقطة`);
+        }
+        
+        function withdraw(wallet) {
+            if (userData.points < 150000) {
+                showNotification(`❌ تحتاج ${150000 - userData.points} نقطة إضافية`, false);
+                return;
+            }
+            
+            let walletNames = {
+                'vodafone': 'فودافون كاش',
+                'orange': 'أورانج كاش',
+                'etisalat': 'اتصالات كاش',
+                'we': 'وي كاش'
+            };
+            
+            let walletNumber = prompt(`أدخل رقم ${walletNames[wallet]}:`);
+            if (walletNumber) {
+                tg.sendData(JSON.stringify({
+                    action: 'withdraw',
+                    wallet: walletNames[wallet],
+                    number: walletNumber,
+                    amount: 600
+                }));
+                
+                showNotification(`✅ تم إرسال طلب السحب إلى ${walletNames[wallet]}`);
+            }
+        }
+        
+        // تحديث البيانات كل ثانية (هنربط مع البوت بعدين)
+        setInterval(updateUI, 1000);
+        updateUI();
+    </script>
+</body>
+</html>
