@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import os
 import random
 import asyncio
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
 # إعداد التسجيل
@@ -227,14 +227,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     points = get_user_points(user_id)
     ads_today = get_ads_today(user_id)
     
-    # زر Mini App بالرابط الجديد
-    web_app_button = InlineKeyboardButton(
-        "🚀 فتح التطبيق المصغر", 
-        web_app=WebAppInfo(url="https://mini-app-production-1706.up.railway.app")
-    )
-    
+    # الأزرار العادية (من غير ميني آب)
     keyboard = [
-        [web_app_button],
         [InlineKeyboardButton("📺 مشاهدة إعلان", callback_data='watch_ad')],
         [InlineKeyboardButton("✅ تسجيل يومي", callback_data='daily_checkin'),
          InlineKeyboardButton("💰 رصيدي", callback_data='balance')],
@@ -641,14 +635,8 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     points = get_user_points(user_id)
     ads_today = get_ads_today(user_id)
     
-    # زر Mini App بالرابط الجديد
-    web_app_button = InlineKeyboardButton(
-        "🚀 فتح التطبيق المصغر", 
-        web_app=WebAppInfo(url="https://mini-app-production-1706.up.railway.app")
-    )
-    
+    # الأزرار العادية (من غير ميني آب)
     keyboard = [
-        [web_app_button],
         [InlineKeyboardButton("📺 مشاهدة إعلان", callback_data='watch_ad')],
         [InlineKeyboardButton("✅ تسجيل يومي", callback_data='daily_checkin'),
          InlineKeyboardButton("💰 رصيدي", callback_data='balance')],
