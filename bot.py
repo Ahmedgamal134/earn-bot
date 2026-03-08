@@ -52,7 +52,7 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS withdrawals
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   user_id INTEGER,
-                  amount INTEGER,
+                  amount REAL,
                   wallet_type TEXT,
                   wallet_number TEXT,
                   status TEXT DEFAULT 'قيد الانتظار',
@@ -258,6 +258,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🎉 أهلاً بك في **بوت الربح الذكي** يا {first_name}!\n\n"
         f"📊 إعلانات اليوم: {ads_today}/400\n"
         f"💰 رصيدك: {points} نقطة\n\n"
+        f"💡 كل 300 نقطة = 55 جنيه (سحب مفتوح)\n\n"
         "اختر من القائمة 👇",
         reply_markup=reply_markup,
         parse_mode='Markdown'
@@ -267,7 +268,7 @@ async def watch_google_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """مشاهدة إعلان جوجل"""
     user_id = update.effective_user.id
     
-    # الرابط الجديد بتاع موقع الإعلانات
+    # الرابط بتاع موقع الإعلانات
     ads_url = "https://adssite-production.up.railway.app"
     
     keyboard = [[InlineKeyboardButton("📺 شاهد الإعلان", url=ads_url)]]
@@ -529,8 +530,8 @@ async def show_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     referrals = user[7]
     referral_earned = user[8]
     
-    # حساب قيمة النقاط بالجنيه
-    egp_value = (points / 150000) * 600
+    # حساب قيمة النقاط بالجنيه (300 نقطة = 55 جنيه)
+    egp_value = (points / 300) * 55
     
     await query.edit_message_text(
         f"💰 **رصيدك الحالي**\n\n"
@@ -539,7 +540,7 @@ async def show_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📊 إجمالي ما كسبته: {total_earned} نقطة\n"
         f"👥 عدد دعواتك: {referrals}\n"
         f"🎁 أرباح الدعوات: {referral_earned} نقطة\n\n"
-        f"💡 150,000 نقطة = 600 جنيه",
+        f"💡 300 نقطة = 55 جنيه (سحب مفتوح)",
         reply_markup=InlineKeyboardMarkup([[
             InlineKeyboardButton("🔙 القائمة", callback_data='main_menu')
         ]]),
@@ -596,22 +597,21 @@ async def copy_referral_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
     )
 
 async def show_withdraw(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """صفحة السحب"""
+    """صفحة السحب (مفتوح)"""
     query = update.callback_query
     user_id = query.from_user.id
     
     user = get_user(user_id)
     points = user[3] if user else 0
     
-    if points < 150000:
-        points_needed = 150000 - points
+    if points < 300:  # الحد الأدنى 300 نقطة
+        points_needed = 300 - points
         
         await query.edit_message_text(
             f"💳 **سحب الأرباح**\n\n"
-            f"❌ لم تصل للحد الأدنى للسحب\n\n"
+            f"❌ الحد الأدنى للسحب هو 300 نقطة (55 جنيه)\n\n"
             f"💰 رصيدك: {points} نقطة\n"
-            f"🎯 الحد الأدنى: 150,000 نقطة (600 جنيه)\n"
-            f"📊 ينقصك: {points_needed} نقطة\n\n"
+            f"📊 ينقصك: {points_needed} نقطة للوصول للحد الأدنى\n\n"
             f"استمر في الكسب حتى تصل للحد الأدنى 💪",
             reply_markup=InlineKeyboardMarkup([[
                 InlineKeyboardButton("🔙 القائمة", callback_data='main_menu')
@@ -620,7 +620,9 @@ async def show_withdraw(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # لو وصل للحد، نعرض اختيار المحفظة
+    # حساب المبلغ بالجنيه (كل 300 نقطة = 55 جنيه)
+    egp_amount = (points / 300) * 55
+    
     keyboard = [
         [InlineKeyboardButton("📱 فودافون كاش", callback_data='wallet_vodafone')],
         [InlineKeyboardButton("🟠 أورانج كاش", callback_data='wallet_orange')],
@@ -631,16 +633,18 @@ async def show_withdraw(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(
         f"💳 **طلب سحب أرباح**\n\n"
-        f"💰 رصيدك: {points} نقطة = 600 جنيه\n"
+        f"💰 رصيدك: {points} نقطة\n"
+        f"💵 قيمتها: {egp_amount:.2f} جنيه\n"
         f"اختر نوع المحفظة الإلكترونية:",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )
 
 async def choose_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """اختيار نوع المحفظة"""
+    """اختيار نوع المحفظة (مفتوح)"""
     query = update.callback_query
     data = query.data
+    user_id = query.from_user.id
     
     wallet_type = {
         'wallet_vodafone': 'فودافون كاش',
@@ -649,11 +653,20 @@ async def choose_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
         'wallet_we': 'وي كاش'
     }.get(data, 'محفظة')
     
+    # جلب النقاط وحساب المبلغ
+    user = get_user(user_id)
+    points = user[3] if user else 0
+    egp_amount = (points / 300) * 55
+    
     context.user_data['wallet_type'] = wallet_type
+    context.user_data['withdraw_amount'] = egp_amount
+    context.user_data['withdraw_points'] = points
     context.user_data['awaiting_wallet'] = True
     
     await query.edit_message_text(
         f"💳 **طلب سحب - {wallet_type}**\n\n"
+        f"💰 رصيدك: {points} نقطة\n"
+        f"💵 المبلغ المستحق: {egp_amount:.2f} جنيه\n\n"
         f"الرجاء إرسال رقم المحفظة الخاص بك:\n"
         f"(مثال: 01012345678)\n\n"
         f"📌 تأكد من كتابة الرقم بشكل صحيح",
@@ -682,7 +695,7 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💰 نقاطك: {points}\n"
         f"👤 دعواتك: {referrals}\n"
         f"📺 إعلانات اليوم: {ads_today}/400 ({ads_percent:.1f}%)\n\n"
-        f"🏆 تقدمك نحو 600 جنيه:\n"
+        f"🏆 تقدمك نحو السحب:\n"
         f"{'█' * int(ads_percent/4)}{'░' * (25 - int(ads_percent/4))} {ads_percent:.1f}%",
         reply_markup=InlineKeyboardMarkup([[
             InlineKeyboardButton("🔙 القائمة", callback_data='main_menu')
@@ -714,7 +727,8 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(
         f"🎯 **القائمة الرئيسية**\n\n"
         f"📊 إعلانات اليوم: {ads_today}/400\n"
-        f"💰 رصيدك: {points} نقطة",
+        f"💰 رصيدك: {points} نقطة\n"
+        f"💡 300 نقطة = 55 جنيه",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )
@@ -821,10 +835,10 @@ async def admin_withdrawals(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for w in withdrawals:
             text += f"🆔 #{w[0]}\n"
             text += f"👤 مستخدم: {w[1]}\n"
-            text += f"💰 المبلغ: {w[3]} جنيه\n"
-            text += f"💳 المحفظة: {w[4]}\n"
-            text += f"📱 الرقم: {w[5]}\n"
-            text += f"📅 التاريخ: {w[7][:16]}\n"
+            text += f"💰 المبلغ: {w[2]:.2f} جنيه\n"
+            text += f"💳 المحفظة: {w[3]}\n"
+            text += f"📱 الرقم: {w[4]}\n"
+            text += f"📅 التاريخ: {w[6][:16]}\n"
             text += "-" * 20 + "\n"
     
     await query.edit_message_text(
@@ -886,15 +900,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # استقبال رقم المحفظة
     if context.user_data.get('awaiting_wallet'):
         wallet_number = text.strip()
+        user_id = update.effective_user.id
         wallet_type = context.user_data.get('wallet_type', 'محفظة')
+        points = context.user_data.get('withdraw_points', 0)
+        egp_amount = context.user_data.get('withdraw_amount', 0)
         
         conn = sqlite3.connect('profit_bot.db')
         c = conn.cursor()
         c.execute('''INSERT INTO withdrawals 
                      (user_id, amount, wallet_type, wallet_number, request_date) 
                      VALUES (?, ?, ?, ?, ?)''',
-                  (user_id, 600, wallet_type, wallet_number, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
-        c.execute("UPDATE users SET points = points - 150000 WHERE user_id=?", (user_id,))
+                  (user_id, egp_amount, wallet_type, wallet_number, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+        
+        # خصم النقاط بالكامل
+        c.execute("UPDATE users SET points = 0 WHERE user_id=?", (user_id,))
+        
         conn.commit()
         conn.close()
         
@@ -902,7 +922,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await update.message.reply_text(
             f"✅ **تم استلام طلب السحب!**\n\n"
-            f"💰 المبلغ: 600 جنيه\n"
+            f"💰 المبلغ: {egp_amount:.2f} جنيه\n"
             f"💳 المحفظة: {wallet_type}\n"
             f"📱 الرقم: {wallet_number}\n\n"
             f"سيتم مراجعة الطلب وإرسال المبلغ خلال 24 ساعة ⏳",
