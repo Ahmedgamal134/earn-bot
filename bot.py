@@ -59,7 +59,7 @@ def init_db():
                   request_date TEXT,
                   process_date TEXT DEFAULT NULL)''')
     
-    # جدول الإعلانات النصية (المحتوى)
+    # جدول الإعلانات النصية (المحتوى) - اختياري احتياطي
     c.execute('''CREATE TABLE IF NOT EXISTS ads_content
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   ad_text TEXT,
@@ -240,7 +240,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # الأزرار العادية
     keyboard = [
-        [InlineKeyboardButton("📺 مشاهدة إعلان", callback_data='watch_ad')],
+        [InlineKeyboardButton("📺 مشاهدة إعلان", callback_data='show_adsgram_ad')],
         [InlineKeyboardButton("✅ تسجيل يومي", callback_data='daily_checkin'),
          InlineKeyboardButton("💰 رصيدي", callback_data='balance')],
         [InlineKeyboardButton("👥 دعوة أصدقاء", callback_data='refer'),
@@ -264,8 +264,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
-async def watch_ad_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """بدء مشاهدة إعلان - توجيه لموقع Adsterra"""
+async def show_adsgram_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """عرض إعلان من AdsGram"""
     query = update.callback_query
     await query.answer()
     
@@ -282,22 +282,20 @@ async def watch_ad_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # رابط موقع Adsterra
-    adsterra_url = "https://adssite-production.up.railway.app"
+    # رابط إعلان AdsGram باستخدام UnitID
+    adsgram_url = f"https://adsgram.ai/show/bot-24839?userId={user_id}"
     
     keyboard = [
-        [InlineKeyboardButton("🌐 شاهد الإعلان على الموقع", url=adsterra_url)],
-        [InlineKeyboardButton("✅ بعد المشاهدة اضغط هنا", callback_data='ad_watched')],
+        [InlineKeyboardButton("🎬 شاهد الإعلان", url=adsgram_url)],
+        [InlineKeyboardButton("✅ شفت الإعلان", callback_data='ad_watched')],
         [InlineKeyboardButton("🔙 إلغاء", callback_data='main_menu')]
     ]
     
     await query.edit_message_text(
-        f"📺 **مشاهدة إعلان Adsterra**\n\n"
-        f"⏱️ **الطريقة الصحيحة:**\n"
-        f"1. اضغط على الزر الأزرق لفتح موقع الإعلانات\n"
-        f"2. شاهد أي إعلان يظهر في الموقع\n"
-        f"3. انتظر 15 ثانية\n"
-        f"4. ارجع هنا واضغط على 'بعد المشاهدة اضغط هنا'\n\n"
+        f"📺 **إعلان AdsGram**\n\n"
+        f"1. اضغط على 'شاهد الإعلان'\n"
+        f"2. شاهد الإعلان كاملًا\n"
+        f"3. ارجع واضغط 'شفت الإعلان'\n\n"
         f"📊 إعلانات اليوم: {ads_today}/400",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
@@ -340,7 +338,7 @@ async def ad_watched(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ads_left = 400 - ads_today
         
         keyboard = [
-            [InlineKeyboardButton("📺 إعلان آخر", callback_data='watch_ad')],
+            [InlineKeyboardButton("📺 إعلان آخر", callback_data='show_adsgram_ad')],
             [InlineKeyboardButton("🔙 القائمة", callback_data='main_menu')]
         ]
         
@@ -366,8 +364,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
     
-    if data == 'watch_ad':
-        await watch_ad_start(update, context)
+    if data == 'show_adsgram_ad':
+        await show_adsgram_ad(update, context)
     elif data == 'ad_watched':
         await ad_watched(update, context)
     elif data == 'daily_checkin':
@@ -638,7 +636,7 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # الأزرار العادية
     keyboard = [
-        [InlineKeyboardButton("📺 مشاهدة إعلان", callback_data='watch_ad')],
+        [InlineKeyboardButton("📺 مشاهدة إعلان", callback_data='show_adsgram_ad')],
         [InlineKeyboardButton("✅ تسجيل يومي", callback_data='daily_checkin'),
          InlineKeyboardButton("💰 رصيدي", callback_data='balance')],
         [InlineKeyboardButton("👥 دعوة أصدقاء", callback_data='refer'),
