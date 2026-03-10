@@ -12,7 +12,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 # التوكن من المتغيرات البيئية
 TOKEN = os.environ.get('BOT_TOKEN')
-ADMIN_IDS = [1103784347]  # ⚠️ غير الرقم ده لمعرفك من @userinfobot
+ADMIN_IDS = [5123456789]  # ⚠️ غير الرقم ده لمعرفك من @userinfobot
 
 # =========== قاعدة البيانات ===========
 def init_db():
@@ -67,7 +67,7 @@ def init_db():
                   ad_type TEXT DEFAULT 'text',
                   is_active INTEGER DEFAULT 1)''')
     
-    # إضافة بعض الإعلانات الافتراضية
+    # إضافة بعض الإعلانات الافتراضية (احتياطي)
     c.execute("SELECT COUNT(*) FROM ads_content")
     if c.fetchone()[0] == 0:
         c.execute('''INSERT INTO ads_content (ad_text, ad_link, ad_type) VALUES
@@ -210,7 +210,7 @@ def get_total_users():
     return count
 
 def get_random_ad():
-    """جلب إعلان عشوائي من قاعدة البيانات"""
+    """جلب إعلان عشوائي من قاعدة البيانات (احتياطي)"""
     conn = sqlite3.connect('profit_bot.db')
     c = conn.cursor()
     c.execute("SELECT id, ad_text, ad_link, ad_type FROM ads_content WHERE is_active=1 ORDER BY RANDOM() LIMIT 1")
@@ -238,7 +238,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     points = get_user_points(user_id)
     ads_today = get_ads_today(user_id)
     
-    # الأزرار العادية (من غير ميني آب)
+    # الأزرار العادية
     keyboard = [
         [InlineKeyboardButton("📺 مشاهدة إعلان", callback_data='watch_ad')],
         [InlineKeyboardButton("✅ تسجيل يومي", callback_data='daily_checkin'),
@@ -264,51 +264,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
-async def watch_google_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """مشاهدة إعلان جوجل"""
-    user_id = update.effective_user.id
-    
-    # الرابط بتاع موقع الإعلانات
-    ads_url = "https://adssite-production.up.railway.app"
-    
-    keyboard = [[InlineKeyboardButton("📺 شاهد الإعلان", url=ads_url)]]
-    await update.message.reply_text(
-        "📺 **مشاهدة إعلان والربح**\n\n"
-        "1. اضغط على الرابط\n"
-        "2. شاهد الإعلان (أي إعلان يظهر)\n"
-        "3. انتظر 15 ثانية\n"
-        "4. ارجع هنا واكتب /claim\n\n"
-        "✅ هتاخد نقطتك بعد المشاهدة",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
-    
-    context.user_data['awaiting_claim'] = True
-
-async def claim_points(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """استلام النقاط بعد المشاهدة"""
-    user_id = update.effective_user.id
-    
-    if not context.user_data.get('awaiting_claim'):
-        await update.message.reply_text("❌ اضغط على /ad أولاً")
-        return
-    
-    ads_today = get_ads_today(user_id)
-    if ads_today >= 400:
-        await update.message.reply_text("❌ انتهت إعلانات اليوم")
-        return
-    
-    add_ad_watch(user_id)
-    new_points = update_points(user_id, 1)
-    
-    await update.message.reply_text(
-        f"✅ تمت الإضافة! +1 نقطة\n💰 رصيدك: {new_points} نقطة"
-    )
-    
-    context.user_data['awaiting_claim'] = False
-
 async def watch_ad_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """بدء مشاهدة إعلان"""
+    """بدء مشاهدة إعلان - توجيه لموقع Adsterra"""
     query = update.callback_query
     await query.answer()
     
@@ -325,41 +282,22 @@ async def watch_ad_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # جلب إعلان عشوائي
-    ad = get_random_ad()
-    if not ad:
-        await query.edit_message_text(
-            "❌ لا توجد إعلانات حالياً، حاول لاحقاً",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔙 القائمة", callback_data='main_menu')
-            ]])
-        )
-        return
+    # رابط موقع Adsterra
+    adsterra_url = "https://adssite-production.up.railway.app"
     
-    ad_id, ad_text, ad_link, ad_type = ad
-    
-    # حفظ الإعلان الحالي في context
-    context.user_data['current_ad'] = {
-        'id': ad_id,
-        'text': ad_text,
-        'link': ad_link,
-        'type': ad_type
-    }
-    
-    # رسالة الإعلان مع زر الرابط وزر الانتظار
     keyboard = [
-        [InlineKeyboardButton("🔗 رابط الإعلان", url=ad_link)],
-        [InlineKeyboardButton("⏳ اضغط بعد مشاهدة الإعلان", callback_data='ad_watched')],
+        [InlineKeyboardButton("🌐 شاهد الإعلان على الموقع", url=adsterra_url)],
+        [InlineKeyboardButton("✅ بعد المشاهدة اضغط هنا", callback_data='ad_watched')],
         [InlineKeyboardButton("🔙 إلغاء", callback_data='main_menu')]
     ]
     
     await query.edit_message_text(
-        f"📺 **مشاهدة إعلان**\n\n"
-        f"{ad_text}\n\n"
-        f"⏱️ **طريقة المشاهدة:**\n"
-        f"1. اضغط على رابط الإعلان\n"
-        f"2. انتظر 15 ثانية\n"
-        f"3. اضغط على '⏳ اضغط بعد المشاهدة'\n\n"
+        f"📺 **مشاهدة إعلان Adsterra**\n\n"
+        f"⏱️ **الطريقة الصحيحة:**\n"
+        f"1. اضغط على الزر الأزرق لفتح موقع الإعلانات\n"
+        f"2. شاهد أي إعلان يظهر في الموقع\n"
+        f"3. انتظر 15 ثانية\n"
+        f"4. ارجع هنا واضغط على 'بعد المشاهدة اضغط هنا'\n\n"
         f"📊 إعلانات اليوم: {ads_today}/400",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
@@ -371,16 +309,6 @@ async def ad_watched(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     user_id = query.from_user.id
-    
-    # التحقق من وجود إعلان حالي
-    if 'current_ad' not in context.user_data:
-        await query.edit_message_text(
-            "❌ حدث خطأ، حاول مرة أخرى",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔙 القائمة", callback_data='main_menu')
-            ]])
-        )
-        return
     
     # إرسال مؤقت الانتظار
     await query.edit_message_text(
@@ -410,9 +338,6 @@ async def ad_watched(update: Update, context: ContextTypes.DEFAULT_TYPE):
         new_points = update_points(user_id, 1)
         ads_today += 1
         ads_left = 400 - ads_today
-        
-        # حذف الإعلان الحالي من context
-        del context.user_data['current_ad']
         
         keyboard = [
             [InlineKeyboardButton("📺 إعلان آخر", callback_data='watch_ad')],
@@ -711,7 +636,7 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     points = get_user_points(user_id)
     ads_today = get_ads_today(user_id)
     
-    # الأزرار العادية (من غير ميني آب)
+    # الأزرار العادية
     keyboard = [
         [InlineKeyboardButton("📺 مشاهدة إعلان", callback_data='watch_ad')],
         [InlineKeyboardButton("✅ تسجيل يومي", callback_data='daily_checkin'),
@@ -965,8 +890,6 @@ def main():
     
     # إضافة المعالجات
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("ad", watch_google_ad))
-    app.add_handler(CommandHandler("claim", claim_points))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
