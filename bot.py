@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import os
 import random
 import asyncio
+import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
@@ -12,7 +13,11 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 # التوكن من المتغيرات البيئية
 TOKEN = os.environ.get('BOT_TOKEN')
-ADMIN_IDS = [1103784347]  # ⚠️ غير الرقم ده لمعرفك من @userinfobot
+ADMIN_IDS = [5123456789]  # ⚠️ غير الرقم ده لمعرفك من @userinfobot
+
+# بيانات AdsGram من الصفحة 134226.jpg والوثائق
+ADSGRAM_API_TOKEN = "a8e2fb...9bb361"  # التوكن الخاص بحسابك في AdsGram (من الصورة)
+ADSGRAM_BLOCK_ID = "24839"  # الجزء الرقمي من UnitID (بدون bot-)
 
 # =========== قاعدة البيانات ===========
 def init_db():
@@ -59,7 +64,7 @@ def init_db():
                   request_date TEXT,
                   process_date TEXT DEFAULT NULL)''')
     
-    # جدول الإعلانات النصية (المحتوى) - اختياري احتياطي
+    # جدول الإعلانات النصية (المحتوى)
     c.execute('''CREATE TABLE IF NOT EXISTS ads_content
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   ad_text TEXT,
@@ -67,7 +72,7 @@ def init_db():
                   ad_type TEXT DEFAULT 'text',
                   is_active INTEGER DEFAULT 1)''')
     
-    # إضافة بعض الإعلانات الافتراضية (احتياطي)
+    # إضافة بعض الإعلانات الافتراضية
     c.execute("SELECT COUNT(*) FROM ads_content")
     if c.fetchone()[0] == 0:
         c.execute('''INSERT INTO ads_content (ad_text, ad_link, ad_type) VALUES
@@ -218,6 +223,28 @@ def get_random_ad():
     conn.close()
     return ad  # (id, text, link, type)
 
+# =========== دالة جلب الإعلان من AdsGram API ===========
+async def fetch_adsgram_ad(user_id: int):
+    """جلب إعلان من AdsGram باستخدام API"""
+    try:
+        url = "https://api.adsgram.ai/v1/ad"  # الرابط المفترض من الوثائق
+        params = {
+            "tgid": user_id,
+            "blockid": ADSGRAM_BLOCK_ID,
+            "token": ADSGRAM_API_TOKEN,
+            "language": "ar"  # اللغة العربية
+        }
+        
+        response = requests.get(url, params=params, timeout=10)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            print(f"❌ خطأ من AdsGram API: {response.status_code}")
+            return None
+    except Exception as e:
+        print(f"❌ خطأ في الاتصال بـ AdsGram API: {e}")
+        return None
+
 # =========== أوامر البوت ===========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """أمر /start"""
@@ -265,7 +292,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def show_adsgram_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """عرض إعلان من AdsGram"""
+    """عرض إعلان من AdsGram باستخدام API"""
     query = update.callback_query
     await query.answer()
     
@@ -282,24 +309,75 @@ async def show_adsgram_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # رابط إعلان AdsGram باستخدام UnitID
-    adsgram_url = f"https://adsgram.ai/show/bot-24839?userId={user_id}"
+    # جلب الإعلان من AdsGram
+    await query.edit_message_text("⏳ جاري تحميل الإعلان...")
     
-    keyboard = [
-        [InlineKeyboardButton("🎬 شاهد الإعلان", url=adsgram_url)],
-        [InlineKeyboardButton("✅ شفت الإعلان", callback_data='ad_watched')],
-        [InlineKeyboardButton("🔙 إلغاء", callback_data='main_menu')]
-    ]
+    ad_data = await fetch_adsgram_ad(user_id)
     
-    await query.edit_message_text(
-        f"📺 **إعلان AdsGram**\n\n"
-        f"1. اضغط على 'شاهد الإعلان'\n"
-        f"2. شاهد الإعلان كاملًا\n"
-        f"3. ارجع واضغط 'شفت الإعلان'\n\n"
-        f"📊 إعلانات اليوم: {ads_today}/400",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
+    if not ad_data:
+        # لو فشل جلب الإعلان، استخدم إعلان افتراضي احتياطي
+        await query.edit_message_text(
+            "⚠️ لا توجد إعلانات متاحة حالياً، حاول لاحقاً",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 القائمة", callback_data='main_menu')
+            ]])
+        )
+        return
+    
+    # بناء رسالة الإعلان حسب البيانات المسترجعة من API
+    try:
+        text_html = ad_data.get('text_html', 'شاهد الإعلان')
+        image_url = ad_data.get('image_url')
+        click_url = ad_data.get('click_url')
+        reward_url = ad_data.get('reward_url')
+        button_name = ad_data.get('button_name', '🔗 رابط الإعلان')
+        button_reward_name = ad_data.get('button_reward_name', '✅ استلام النقاط')
+        
+        # حفظ بيانات الإعلان في context عشان نستخدمها بعد المشاهدة
+        context.user_data['current_ad'] = {
+            'reward_url': reward_url,
+            'click_url': click_url
+        }
+        
+        keyboard = []
+        
+        # زر رابط الإعلان (إذا وجد)
+        if click_url:
+            keyboard.append([InlineKeyboardButton(button_name, url=click_url)])
+        
+        # زر المكافأة (بعد المشاهدة)
+        keyboard.append([InlineKeyboardButton(button_reward_name, callback_data='ad_watched')])
+        keyboard.append([InlineKeyboardButton("🔙 إلغاء", callback_data='main_menu')])
+        
+        # إرسال الإعلان
+        if image_url:
+            # لو في صورة، نرسلها مع الكابشن
+            await query.message.reply_photo(
+                photo=image_url,
+                caption=text_html,
+                parse_mode='HTML',
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                protect_content=True  # منع إعادة التوجيه (مهم لـ AdsGram)
+            )
+            # حذف رسالة "جاري التحميل"
+            await query.delete_message()
+        else:
+            # لو مفيش صورة، نرسل رسالة نصية
+            await query.edit_message_text(
+                text=text_html,
+                parse_mode='HTML',
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                protect_content=True  # منع إعادة التوجيه
+            )
+            
+    except Exception as e:
+        print(f"❌ خطأ في عرض الإعلان: {e}")
+        await query.edit_message_text(
+            "❌ حدث خطأ في عرض الإعلان",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 القائمة", callback_data='main_menu')
+            ]])
+        )
 
 async def ad_watched(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """بعد مشاهدة الإعلان"""
