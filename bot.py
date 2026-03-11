@@ -303,17 +303,42 @@ async def watch_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
-async def ad_watched(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """بعد مشاهدة الإعلان"""
+async def watch_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """مشاهدة إعلان - توجيه للموقع"""
     query = update.callback_query
     await query.answer()
     
     user_id = query.from_user.id
+    ads_today = get_ads_today(user_id)
     
-    # إرسال مؤقت الانتظار
+    if ads_today >= 400:
+        await query.edit_message_text(
+            "❌ لقد استنفدت حد الإعلانات اليومي (400 إعلان)\n"
+            "تعال غداً لمشاهدة المزيد! 🌅",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 القائمة", callback_data='main_menu')
+            ]])
+        )
+        return
+    
+    # رابط موقع الإعلانات (مهم يبقى صح)
+    site_url = "https://t.me/YourTapEarnBot/Earn_App"
+    
+    keyboard = [
+        [InlineKeyboardButton("🌐 شاهد الإعلان على الموقع", url=site_url)],
+        [InlineKeyboardButton("✅ بعد المشاهدة اضغط هنا", callback_data='ad_watched')],
+        [InlineKeyboardButton("🔙 إلغاء", callback_data='main_menu')]
+    ]
+    
     await query.edit_message_text(
-        "⏳ **جاري التحقق...**\n\n"
-        "الرجاء الانتظار 15 ثانية",
+        f"📺 **مشاهدة إعلان**\n\n"
+        f"⏱️ **الطريقة الصحيحة:**\n"
+        f"1. اضغط على الرابط لفتح موقع الإعلانات\n"
+        f"2. شاهد أي إعلان يظهر في الموقع\n"
+        f"3. انتظر 15 ثانية\n"
+        f"4. ارجع هنا واضغط على 'بعد المشاهدة اضغط هنا'\n\n"
+        f"📊 إعلانات اليوم: {ads_today}/400",
+        reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )
     
