@@ -13,7 +13,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 # التوكن من المتغيرات البيئية
 TOKEN = os.environ.get('BOT_TOKEN')
-ADMIN_IDS = [5123456789]  # ⚠️ غير الرقم ده لمعرفك من @userinfobot
+ADMIN_IDS = [1103784347]  # ⚠️ غير الرقم ده لمعرفك من @userinfobot
 
 # بيانات AdsGram من الصفحة 134226.jpg والوثائق
 ADSGRAM_API_TOKEN = "a8e2fb...9bb361"  # التوكن الخاص بحسابك في AdsGram (من الصورة)
