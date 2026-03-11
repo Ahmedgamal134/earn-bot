@@ -283,7 +283,7 @@ async def watch_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # رابط موقع Ezmob
-    site_url = "https://adssite-production.up.railway.app"
+    site_url = "https://t.me/YourTapEarnBot/Earn_App"
     
     keyboard = [
         [InlineKeyboardButton("🌐 شاهد الإعلان على الموقع", url=site_url)],
