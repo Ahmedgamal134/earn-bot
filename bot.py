@@ -16,9 +16,9 @@ TOKEN = os.environ.get('BOT_TOKEN')
 ADMIN_IDS = [1103784347]  # ⚠️ غير الرقم ده لمعرفك من @userinfobot
 
 # بيانات AdsGram من الصفحة 134226.jpg والوثائق
-ADSGRAM_API_TOKEN = "a8e2fb...9bb361"  # التوكن الخاص بحسابك في AdsGram (من الصورة)
-ADSGRAM_BLOCK_ID = "24839"  # الجزء الرقمي من UnitID (بدون bot-)
 
+ADSGRAM_API_TOKEN = "a8e2fbcbf2714fb6b87b08b6c39bb361"
+ADSGRAM_BLOCK_ID = "24839"
 # =========== قاعدة البيانات ===========
 def init_db():
     """إنشاء جداول قاعدة البيانات"""
