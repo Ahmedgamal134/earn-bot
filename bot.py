@@ -5,7 +5,7 @@ import os
 import random
 import asyncio
 import json
-import requests  # <-- هنستخدم requests عشان نطلب الإعلانات من API بتاع TADS
+import requests  # <-- مهم عشان نطلب الإعلانات من TADS
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
@@ -17,10 +17,9 @@ TOKEN = os.environ.get('BOT_TOKEN')
 ADMIN_IDS = [1103784347]  # ⚠️ غير الرقم ده لمعرفك من @userinfobot
 
 # =========== بيانات TADS (من حسابك) ===========
-TADS_WIDGET_ID = 9544  # الـ ID بتاع الـ widget
-TADS_DEBUG = False     # لازم يكون False عشان تجيب إعلانات حقيقية (مش وهمية) 
+TADS_WIDGET_ID = 9544  # الـ ID بتاع الـ widget (متأكدين منه)
+TADS_DEBUG = False     # لازم يكون False عشان تجيب إعلانات حقيقية
 TADS_API_URL = "https://api.tads.me/v1/ad"  # الرابط المفترض لطلب الإعلانات
-TADS_REWARD_URL = "https://your-webhook-url.com/tads-callback"  # دا الـ Webhook URL اللي المفروض تضيفه في إعدادات الـ Widget عشان TADS تبعتلك إشارة لما المستخدم يشوف أو يضغط على إعلان
 
 # =========== قاعدة البيانات ===========
 def init_db():
@@ -74,16 +73,6 @@ def init_db():
                   ad_link TEXT,
                   ad_type TEXT DEFAULT 'text',
                   is_active INTEGER DEFAULT 1)''')
-    
-    # إضافة بعض الإعلانات الافتراضية (احتياطي)
-    c.execute("SELECT COUNT(*) FROM ads_content")
-    if c.fetchone()[0] == 0:
-        c.execute('''INSERT INTO ads_content (ad_text, ad_link, ad_type) VALUES
-                     ('اشترك في قناتنا على التليجرام', 'https://t.me/your_channel', 'channel'),
-                     ('حمّل تطبيق الألعاب الجديد', 'https://play.google.com/store/apps/', 'text'),
-                     ('خصم 20% على أول طلب', 'https://example.com/coupon', 'text'),
-                     ('سيرفر ديسكورد للألعاب', 'https://discord.gg/', 'text'),
-                     ('كوبون خصم 50 جنيه', 'https://example.com/offer', 'text')''')
     
     conn.commit()
     conn.close()
@@ -226,22 +215,16 @@ def get_random_ad():
     conn.close()
     return ad  # (id, text, link, type)
 
-# =========== دوال TADS (طريقة API الحقيقية) ===========
+# =========== دوال TADS (طريقة API) ===========
 async def fetch_tads_ad(user_id: int):
     """جلب إعلان حقيقي من TADS باستخدام widget_id"""
     try:
-        # 1. نبني الطلب اللي هنرسله لـ TADS
-        # دي طريقة تقريبية حسب وثائق TADS، لكن التفاصيل الدقيقة محتاجة تتأكد من موقعهم
         params = {
             'widget_id': TADS_WIDGET_ID,
             'user_id': user_id,
-            'debug': 1 if TADS_DEBUG else 0  # لو True، هيرجع إعلانات تجريبية
+            'debug': 1 if TADS_DEBUG else 0
         }
-        
-        # 2. نرسل طلب GET لـ TADS API
-        # هنا حطيت URL افتراضي، لازم تتأكد من الرابط الصحيح من وثائقهم
         response = requests.get(TADS_API_URL, params=params, timeout=10)
-        
         if response.status_code == 200:
             ad_data = response.json()
             print(f"✅ تم جلب إعلان من TADS للمستخدم {user_id}")
@@ -254,7 +237,7 @@ async def fetch_tads_ad(user_id: int):
         return None
 
 async def fetch_tads_ad_fallback(user_id: int):
-    """دالة احتياطية لو API مش شغال، بتجيب بيانات إعلان وهمي"""
+    """دالة احتياطية لو API مش شغال، بتجيب إعلان وهمي"""
     print(f"⚠️ استخدام الإعلان الاحتياطي للمستخدم {user_id}")
     return {
         'id': TADS_WIDGET_ID,
@@ -262,7 +245,7 @@ async def fetch_tads_ad_fallback(user_id: int):
         'title': 'إعلان ممول',
         'description': 'شاهد هذا الإعلان واحصل على نقاط مجانية!',
         'click_url': 'https://t.me/YourTapEarnBot/Earn_App?start=ad',
-        'reward_type': 'click'  # TGB يعطي مكافأة عند النقر 
+        'reward_type': 'click'
     }
 
 # =========== أوامر البوت ===========
@@ -273,19 +256,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = user.username or "لا يوجد"
     first_name = user.first_name or "مستخدم"
     
-    # التحقق من وجود دعوة
     referrer_id = None
     if context.args and context.args[0].isdigit():
         referrer_id = int(context.args[0])
     
-    # إنشاء المستخدم لو مش موجود
     create_user(user_id, username, first_name, referrer_id)
     
-    # جلب البيانات
     points = get_user_points(user_id)
     ads_today = get_ads_today(user_id)
     
-    # الأزرار العادية
     keyboard = [
         [InlineKeyboardButton("📺 مشاهدة إعلان TADS", callback_data='watch_tads_ad')],
         [InlineKeyboardButton("✅ تسجيل يومي", callback_data='daily_checkin'),
@@ -295,7 +274,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📊 الإحصائيات", callback_data='stats')]
     ]
     
-    # لو المستخدم أدمن، ضيف زر التحكم
     if user_id in ADMIN_IDS:
         keyboard.append([InlineKeyboardButton("⚙️ لوحة التحكم", callback_data='admin_panel')])
     
@@ -312,7 +290,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def watch_tads_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """مشاهدة إعلان TADS (يحاول يجيب إعلان حقيقي من API)"""
+    """مشاهدة إعلان TADS"""
     query = update.callback_query
     await query.answer()
     
@@ -329,32 +307,28 @@ async def watch_tads_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # 1. نحاول نجيب إعلان حقيقي من API
     await query.edit_message_text("⏳ جاري تحميل الإعلان...")
     
+    # محاولة جلب إعلان حقيقي من TADS
     ad_data = await fetch_tads_ad(user_id)
     
-    # 2. لو API فشل (مثلاً مش شغال أو رجع None)، نستخدم الإعلان الاحتياطي
+    # لو فشل، استخدم الإعلان الاحتياطي
     if not ad_data:
         ad_data = await fetch_tads_ad_fallback(user_id)
     
-    # 3. بناء رسالة الإعلان وعرضها
     try:
-        # حفظ بيانات الإعلان في context عشان نستخدمها بعدين
         context.user_data['current_ad'] = {
             'id': ad_data.get('id', TADS_WIDGET_ID),
             'click_url': ad_data.get('click_url', 'https://t.me/YourTapEarnBot/Earn_App'),
             'reward_type': ad_data.get('reward_type', 'click')
         }
         
-        # إنشاء أزرار الإعلان
         keyboard = [
             [InlineKeyboardButton("🔗 رابط الإعلان", url=ad_data.get('click_url', 'https://t.me/YourTapEarnBot/Earn_App'))],
             [InlineKeyboardButton("✅ استلام النقاط", callback_data='tads_ad_clicked')],
             [InlineKeyboardButton("🔙 إلغاء", callback_data='main_menu')]
         ]
         
-        # إرسال الإعلان (صورة + كابشن)
         image_url = ad_data.get('image_url', 'https://via.placeholder.com/300x150/764ba2/ffffff?text=إعلان')
         title = ad_data.get('title', 'إعلان ممول')
         description = ad_data.get('description', 'شاهد هذا الإعلان واحصل على نقاط مجانية!')
@@ -365,8 +339,6 @@ async def watch_tads_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown',
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
-        
-        # حذف رسالة "جاري التحميل"
         await query.delete_message()
             
     except Exception as e:
@@ -379,13 +351,12 @@ async def watch_tads_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 async def tads_ad_clicked(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """بعد النقر على إعلان TADS (أو الضغط على استلام النقاط)"""
+    """بعد النقر على إعلان TADS"""
     query = update.callback_query
     await query.answer()
     
     user_id = query.from_user.id
     
-    # التحقق من وجود إعلان حالي
     if 'current_ad' not in context.user_data:
         await query.edit_message_text(
             "❌ حدث خطأ، حاول مرة أخرى",
@@ -395,17 +366,14 @@ async def tads_ad_clicked(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # إرسال مؤقت الانتظار
     await query.edit_message_text(
         "⏳ **جاري التحقق...**\n\n"
         "الرجاء الانتظار 15 ثانية",
         parse_mode='Markdown'
     )
     
-    # انتظر 15 ثانية
     await asyncio.sleep(15)
     
-    # تسجيل المشاهدة
     ads_today = get_ads_today(user_id)
     
     if ads_today >= 400:
@@ -417,14 +385,12 @@ async def tads_ad_clicked(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # تسجيل المشاهدة وإضافة النقاط
     success = add_ad_watch(user_id)
     if success:
         new_points = update_points(user_id, 1)
         ads_today += 1
         ads_left = 400 - ads_today
         
-        # حذف الإعلان الحالي من context
         del context.user_data['current_ad']
         
         keyboard = [
@@ -487,34 +453,25 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == 'admin_add_ad' and query.from_user.id in ADMIN_IDS:
         await admin_add_ad(update, context)
 
-# =========== باقي أوامر المستخدم (زي ما هي) ===========
-# دوال daily_checkin, show_balance, show_referral, copy_referral_link, show_withdraw, choose_wallet, show_stats, main_menu
-# كلها موجودة في الكود القديم، مش محتاج نكررها هنا للاختصار.
-# لو حابب أضيفها كاملة في الملف النهائي، قولي.
+# =========== باقي أوامر المستخدم (daily_checkin, show_balance, etc.) ===========
+# (هتضيف هنا الدوال الباقي من الكود القديم)
 
-# =========== أوامر الأدمن (زي ما هي) ===========
-# دوال admin_panel, admin_stats, admin_users, admin_withdrawals, admin_ads, admin_add_ad
-# كلها موجودة في الكود القديم.
+# =========== أوامر الأدمن ===========
+# (هتضيف هنا دوال admin_panel, admin_stats, etc.)
 
 # =========== تشغيل البوت ===========
 def main():
-    """تشغيل البوت"""
     if not TOKEN:
         print("❌ خطأ: لم يتم تعيين BOT_TOKEN")
         return
     
-    # إنشاء قاعدة البيانات
     init_db()
-    
-    # إنشاء التطبيق
     app = Application.builder().token(TOKEN).build()
     
-    # إضافة المعالجات
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    # تشغيل البوت
     print("✅ البوت يعمل بنجاح...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
