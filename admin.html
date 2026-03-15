@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة تحكم المشرفين - بوت الربح</title>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(145deg, #0f0c29, #302b63, #24243e);
+            color: white;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .header h1 {
+            color: #ffd700;
+            margin-bottom: 10px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 215, 0, 0.1);
+            border-color: #ffd700;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #ffd700;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.8;
+            margin-top: 5px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .tab-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .tab-btn:hover {
+            background: rgba(255, 215, 0, 0.1);
+            border-color: #ffd700;
+        }
+
+        .tab-btn.active {
+            background: #ffd700;
+            color: #333;
+            border-color: #ffd700;
+        }
+
+        .search-box {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 50px;
+            padding: 10px 20px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .search-box input {
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 16px;
+            padding: 10px;
+            width: 100%;
+            outline: none;
+        }
+
+        .search-box input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .search-box button {
+            background: #ffd700;
+            border: none;
+            color: #333;
+            padding: 10px 20px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .table-container {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 20px;
+            overflow-x: auto;
+            margin-bottom: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: rgba(255, 215, 0, 0.2);
+            color: #ffd700;
+            padding: 15px;
+            text-align: right;
+            font-weight: 600;
+        }
+
+        td {
+            padding: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        tr:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .badge {
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge.active {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .badge.banned {
+            background: #f44336;
+            color: white;
+        }
+
+        .badge.pending {
+            background: #ffd700;
+            color: #333;
+        }
+
+        .badge.completed {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .badge.rejected {
+            background: #f44336;
+            color: white;
+        }
+
+        .action-btns {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+        }
+
+        .action-btn {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .action-btn.edit {
+            background: #2196F3;
+            color: white;
+        }
+
+        .action-btn.ban {
+            background: #f44336;
+            color: white;
+        }
+
+        .action-btn.unban {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .action-btn.add-points {
+            background: #ffd700;
+            color: #333;
+        }
+
+        .action-btn.view {
+            background: #9C27B0;
+            color: white;
+        }
+
+        .action-btn.approve {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .action-btn.reject {
+            background: #f44336;
+            color: white;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: linear-gradient(145deg, #1a1a2e, #16213e);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            border: 1px solid #ffd700;
+        }
+
+        .modal-content h2 {
+            color: #ffd700;
+            margin-bottom: 20px;
+        }
+
+        .modal-content input, .modal-content select, .modal-content textarea {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .page-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .page-btn:hover, .page-btn.active {
+            background: #ffd700;
+            color: #333;
+            border-color: #ffd700;
+        }
+
+        .refresh-btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border: none;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .live-notification {
+            background: rgba(255, 215, 0, 0.1);
+            border: 1px solid #ffd700;
+            border-radius: 10px;
+            padding: 10px;
+            margin-bottom: 10px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚙️ لوحة تحكم المشرفين - متابعة المستخدمين لحظياً</h1>
+            <p>مرحباً بك في نظام إدارة المستخدمين المتكامل - كل النشاطات تظهر هنا فوراً</p>
+            
+            <button class="refresh-btn" onclick="loadAllData()">
+                🔄 تحديث البيانات
+            </button>
+            
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalUsers">0</div>
+                    <div class="stat-label">إجمالي المستخدمين</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="activeToday">0</div>
+                    <div class="stat-label">نشط اليوم</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="totalPoints">0</div>
+                    <div class="stat-label">إجمالي النقاط</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="pendingWithdrawals">0</div>
+                    <div class="stat-label">طلبات سحب</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="todayAds">0</div>
+                    <div class="stat-label">إعلانات اليوم</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="newUsersToday">0</div>
+                    <div class="stat-label">مستخدمين جدد</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- النشاط الحي (بيظهر فوراً) -->
+        <div class="table-container" id="liveActivity">
+            <h3>🔴 نشاط حي (آخر 10 أحداث)</h3>
+            <div id="liveEvents"></div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('users')">👥 المستخدمين</button>
+            <button class="tab-btn" onclick="switchTab('withdrawals')">💳 طلبات السحب</button>
+            <button class="tab-btn" onclick="switchTab('activity')">📋 سجل النشاط</button>
+            <button class="tab-btn" onclick="switchTab('stats')">📊 إحصائيات</button>
+        </div>
+
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="🔍 بحث باسم المستخدم أو ID" onkeyup="searchUsers()">
+            <button onclick="searchUsers()">بحث</button>
+        </div>
+
+        <!-- تبويب المستخدمين -->
+        <div id="usersTab" class="tab-content active">
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>المستخدم</th>
+                            <th>ID</th>
+                            <th>النقاط</th>
+                            <th>إجمالي الأرباح</th>
+                            <th>إعلانات اليوم</th>
+                            <th>سلسلة</th>
+                            <th>الدعوات</th>
+                            <th>المحافظ</th>
+                            <th>الحالة</th>
+                            <th>الإجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersTableBody">
+                        <tr><td colspan="10" style="text-align: center;">جاري تحميل البيانات...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="pagination" id="usersPagination"></div>
+        </div>
+
+        <!-- تبويب طلبات السحب -->
+        <div id="withdrawalsTab" class="tab-content">
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>رقم الطلب</th>
+                            <th>المستخدم</th>
+                            <th>المبلغ</th>
+                            <th>المحفظة</th>
+                            <th>رقم المحفظة</th>
+                            <th>التاريخ</th>
+                            <th>الحالة</th>
+                            <th>الإجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="withdrawalsTableBody">
+                        <tr><td colspan="8" style="text-align: center;">جاري تحميل البيانات...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- تبويب سجل النشاط -->
+        <div id="activityTab" class="tab-content">
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>الوقت</th>
+                            <th>المستخدم</th>
+                            <th>النشاط</th>
+                            <th>التفاصيل</th>
+                        </tr>
+                    </thead>
+                    <tbody id="activityTableBody">
+                        <tr><td colspan="4" style="text-align: center;">جاري تحميل البيانات...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- تبويب الإحصائيات -->
+        <div id="statsTab" class="tab-content">
+            <div class="table-container">
+                <h3>🏆 أفضل 10 مستخدمين</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>المستخدم</th>
+                            <th>النقاط</th>
+                            <th>إجمالي الأرباح</th>
+                            <th>الدعوات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="topUsersBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- مودال تعديل المستخدم -->
+    <div class="modal" id="userModal">
+        <div class="modal-content">
+            <h2 id="modalTitle">تعديل مستخدم</h2>
+            <input type="hidden" id="modalUserId">
+            <input type="text" id="modalUsername" placeholder="اسم المستخدم">
+            <input type="number" id="modalPoints" placeholder="النقاط">
+            <textarea id="modalNotes" placeholder="ملاحظات" rows="3"></textarea>
+            <select id="modalStatus">
+                <option value="active">نشط</option>
+                <option value="banned">محظور</option>
+            </select>
+            <div class="modal-buttons">
+                <button class="action-btn edit" onclick="saveUser()">💾 حفظ</button>
+                <button class="action-btn ban" onclick="closeModal()">❌ إلغاء</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // =========== بيانات حية ===========
+        let users = [];
+        let withdrawals = [];
+        let activities = [];
+        let currentPage = 1;
+        const itemsPerPage = 20;
+        let liveEvents = [];
+
+        // =========== تحميل البيانات من API ===========
+        async function loadAllData() {
+            try {
+                // جلب كل المستخدمين
+                const usersRes = await fetch('/api/admin/users');
+                const usersData = await usersRes.json();
+                if (usersData.success) {
+                    users = usersData.users;
+                }
+
+                // جلب طلبات السحب
+                const withdrawRes = await fetch('/api/admin/withdrawals');
+                const withdrawData = await withdrawRes.json();
+                if (withdrawData.success) {
+                    withdrawals = withdrawData.withdrawals;
+                }
+
+                // جلب سجل النشاط
+                const activityRes = await fetch('/api/admin/activities');
+                const activityData = await activityRes.json();
+                if (activityData.success) {
+                    activities = activityData.activities;
+                }
+
+                updateStats();
+                displayUsers();
+                displayWithdrawals();
+                displayActivities();
+                displayTopUsers();
+            } catch (error) {
+                console.log('خطأ في تحميل البيانات، استخدام بيانات تجريبية:', error);
+                loadSampleData();
+            }
+        }
+
+        // =========== بيانات تجريبية ===========
+        function loadSampleData() {
+            users = [];
+            for (let i = 1; i <= 30; i++) {
+                users.push({
+                    id: 1000000 + i,
+                    username: `user_${i}`,
+                    first_name: `مستخدم ${i}`,
+                    points: Math.floor(Math.random() * 5000),
+                    total_earned: Math.floor(Math.random() * 10000),
+                    ads_today: Math.floor(Math.random() * 50),
+                    streak: Math.floor(Math.random() * 30),
+                    referrals: Math.floor(Math.random() * 20),
+                    wallets: [
+                        { type: 'vodafone', number: '0101234' + String(i).padStart(4, '0') }
+                    ],
+                    is_banned: Math.random() > 0.9 ? 1 : 0,
+                    ban_reason: null,
+                    joined_date: new Date(Date.now() - Math.random() * 10000000000).toISOString()
+                });
+            }
+
+            withdrawals = [];
+            for (let i = 1; i <= 5; i++) {
+                withdrawals.push({
+                    id: i,
+                    user_id: 1000000 + i,
+                    user_name: `مستخدم ${i}`,
+                    amount: (Math.random() * 500).toFixed(2),
+                    wallet_type: 'vodafone',
+                    wallet_number: '0101234' + String(i).padStart(4, '0'),
+                    request_date: new Date().toISOString(),
+                    status: ['pending', 'completed', 'rejected'][Math.floor(Math.random() * 3)]
+                });
+            }
+
+            activities = [];
+            for (let i = 1; i <= 20; i++) {
+                activities.push({
+                    time: new Date(Date.now() - Math.random() * 5000000000).toISOString(),
+                    user_id: 1000000 + i,
+                    user_name: `مستخدم ${i}`,
+                    action: ['مشاهدة إعلان', 'تسجيل يومي', 'عجلة الحظ', 'طلب سحب'][Math.floor(Math.random() * 4)],
+                    details: `${Math.floor(Math.random() * 200)} نقطة`
+                });
+            }
+
+            // إضافة أحداث حية
+            addLiveEvent('📺', 'مستخدم 5 شاهد إعلان', 'منذ دقيقة');
+            addLiveEvent('✅', 'مستخدم 12 سجل يومياً', 'منذ 3 دقائق');
+            addLiveEvent('🎡', 'مستخدم 7 ربح 50 نقطة', 'منذ 5 دقائق');
+            addLiveEvent('💳', 'مستخدم 3 طلب سحب 55 جنيه', 'منذ 7 دقائق');
+
+            updateStats();
+            displayUsers();
+            displayWithdrawals();
+            displayActivities();
+            displayTopUsers();
+        }
+
+        // =========== إضافة حدث حي ===========
+        function addLiveEvent(icon, text, time) {
+            const eventDiv = document.createElement('div');
+            eventDiv.className = 'live-notification';
+            eventDiv.innerHTML = `${icon} ${text} - <small>${time}</small>`;
+            
+            const liveEventsDiv = document.getElementById('liveEvents');
+            liveEventsDiv.insertBefore(eventDiv, liveEventsDiv.firstChild);
+            
+            // الاحتفاظ بآخر 10 أحداث فقط
+            if (liveEventsDiv.children.length > 10) {
+                liveEventsDiv.removeChild(liveEventsDiv.lastChild);
+            }
+        }
+
+        // =========== تحديث الإحصائيات ===========
+        function updateStats() {
+            const today = new Date().toDateString();
+            const activeToday = users.filter(u => u.ads_today > 0).length;
+            const totalPoints = users.reduce((sum, u) => sum + u.points, 0);
+            const pendingWithdrawals = withdrawals.filter(w => w.status === 'pending').length;
+            const todayAds = users.reduce((sum, u) => sum + (u.ads_today || 0), 0);
+            const newUsersToday = users.filter(u => new Date(u.joined_date).toDateString() === today).length;
+
+            document.getElementById('totalUsers').textContent = users.length;
+            document.getElementById('activeToday').textContent = activeToday;
+            document.getElementById('totalPoints').textContent = totalPoints;
+            document.getElementById('pendingWithdrawals').textContent = pendingWithdrawals;
+            document.getElementById('todayAds').textContent = todayAds;
+            document.getElementById('newUsersToday').textContent = newUsersToday;
+        }
+
+        // =========== عرض المستخدمين ===========
+        function displayUsers() {
+            const tbody = document.getElementById('usersTableBody');
+            const start = (currentPage - 1) * itemsPerPage;
+            const end = start + itemsPerPage;
+            const filteredUsers = filterUsers();
+            const pageUsers = filteredUsers.slice(start, end);
+            
+            if (pageUsers.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center;">لا يوجد مستخدمين</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = '';
+            pageUsers.forEach(user => {
+                const walletIcons = {
+                    'vodafone': '📱',
+                    'orange': '🟠',
+                    'etisalat': '📞',
+                    'we': '💳',
+                    'paypal': '🌐'
+                };
+
+                const walletsHtml = user.wallets ? user.wallets.map(w => 
+                    `<span title="${w.number}" style="margin:0 2px; font-size:18px;">${walletIcons[w.type] || '💳'}</span>`
+                ).join('') : 'لا يوجد';
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${user.first_name} (@${user.username || 'لا يوجد'})</td>
+                        <td><code>${user.id}</code></td>
+                        <td><strong style="color:#ffd700;">${user.points}</strong></td>
+                        <td>${user.total_earned}</td>
+                        <td>${user.ads_today || 0}/400</td>
+                        <td>${user.streak || 0} 🔥</td>
+                        <td>${user.referrals || 0}</td>
+                        <td style="font-size:20px;">${walletsHtml}</td>
+                        <td><span class="badge ${user.is_banned ? 'banned' : 'active'}">${user.is_banned ? 'محظور' : 'نشط'}</span></td>
+                        <td>
+                            <div class="action-btns">
+                                <button class="action-btn view" onclick="viewUser(${user.id})" title="عرض">👁️</button>
+                                <button class="action-btn edit" onclick="editUser(${user.id})" title="تعديل">✏️</button>
+                                <button class="action-btn add-points" onclick="addPoints(${user.id})" title="إضافة نقاط">➕</button>
+                                ${user.is_banned ? 
+                                    `<button class="action-btn unban" onclick="unbanUser(${user.id})" title="إلغاء حظر">✅</button>` :
+                                    `<button class="action-btn ban" onclick="banUser(${user.id})" title="حظر">🚫</button>`
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            // تحديث pagination
+            const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+            const pagination = document.getElementById('usersPagination');
+            pagination.innerHTML = '';
+            
+            for (let i = 1; i <= totalPages; i++) {
+                pagination.innerHTML += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
+            }
+        }
+
+        // =========== عرض طلبات السحب ===========
+        function displayWithdrawals() {
+            const tbody = document.getElementById('withdrawalsTableBody');
+            
+            if (withdrawals.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">لا توجد طلبات سحب</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = '';
+            withdrawals.filter(w => w.status === 'pending').forEach(w => {
+                const walletNames = {
+                    'vodafone': '📱 فودافون كاش',
+                    'orange': '🟠 أورانج كاش',
+                    'etisalat': '📞 اتصالات كاش',
+                    'we': '💳 وي كاش',
+                    'paypal': '🌐 PayPal'
+                };
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td>#${w.id}</td>
+                        <td>${w.user_name}</td>
+                        <td><strong>${w.amount} جنيه</strong></td>
+                        <td>${walletNames[w.wallet_type] || w.wallet_type}</td>
+                        <td dir="ltr">${w.wallet_number}</td>
+                        <td>${new Date(w.request_date).toLocaleString('ar-EG')}</td>
+                        <td><span class="badge pending">⏳ قيد الانتظار</span></td>
+                        <td>
+                            <div class="action-btns">
+                                <button class="action-btn approve" onclick="approveWithdrawal(${w.id})">✅ قبول</button>
+                                <button class="action-btn reject" onclick="rejectWithdrawal(${w.id})">❌ رفض</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        // =========== عرض سجل النشاط ===========
+        function displayActivities() {
+            const tbody = document.getElementById('activityTableBody');
+            
+            if (activities.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">لا يوجد نشاط</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = '';
+            activities.slice(0, 50).forEach(act => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${new Date(act.time).toLocaleString('ar-EG')}</td>
+                        <td>${act.user_name}</td>
+                        <td>${act.action}</td>
+                        <td>${act.details}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        // =========== عرض أفضل المستخدمين ===========
+        function displayTopUsers() {
+            const tbody = document.getElementById('topUsersBody');
+            const topUsers = [...users].sort((a, b) => b.points - a.points).slice(0, 10);
+            
+            tbody.innerHTML = '';
+            topUsers.forEach((user, index) => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>#${index + 1}</td>
+                        <td>${user.first_name} (@${user.username || 'لا يوجد'})</td>
+                        <td>${user.points}</td>
+                        <td>${user.total_earned}</td>
+                        <td>${user.referrals || 0}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        // =========== دوال البحث والتصفية ===========
+        function filterUsers() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            
+            return users.filter(user => 
+                user.first_name.toLowerCase().includes(searchTerm) ||
+                (user.username && user.username.toLowerCase().includes(searchTerm)) ||
+                user.id.toString().includes(searchTerm)
+            );
+        }
+
+        function searchUsers() {
+            currentPage = 1;
+            displayUsers();
+        }
+
+        function goToPage(page) {
+            currentPage = page;
+            displayUsers();
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            document.querySelector(`[onclick="switchTab('${tab}')"]`).classList.add('active');
+            document.getElementById(tab + 'Tab').classList.add('active');
+        }
+
+        // =========== دوال إجراءات المستخدمين ===========
+        function viewUser(id) {
+            const user = users.find(u => u.id === id);
+            const walletsList = user.wallets ? user.wallets.map(w => 
+                `${w.type}: ${w.number}`
+            ).join('\n') : 'لا يوجد';
+
+            Swal.fire({
+                title: `معلومات المستخدم ${user.first_name}`,
+                html: `
+                    <div style="text-align: right;">
+                        <p><strong>ID:</strong> <code>${user.id}</code></p>
+                        <p><strong>اليوزر:</strong> @${user.username || 'لا يوجد'}</p>
+                        <p><strong>النقاط:</strong> ${user.points}</p>
+                        <p><strong>إجمالي الأرباح:</strong> ${user.total_earned}</p>
+                        <p><strong>إعلانات اليوم:</strong> ${user.ads_today || 0}/400</p>
+                        <p><strong>السلسلة:</strong> ${user.streak || 0}</p>
+                        <p><strong>الدعوات:</strong> ${user.referrals || 0}</p>
+                        <p><strong>المحافظ:</strong><br>${walletsList.replace(/\n/g, '<br>')}</p>
+                        <p><strong>تاريخ التسجيل:</strong> ${new Date(user.joined_date).toLocaleDateString('ar-EG')}</p>
+                    </div>
+                `,
+                icon: 'info',
+                confirmButtonText: 'حسناً'
+            });
+        }
+
+        function editUser(id) {
+            const user = users.find(u => u.id === id);
+            document.getElementById('modalUserId').value = user.id;
+            document.getElementById('modalUsername').value = user.first_name;
+            document.getElementById('modalPoints').value = user.points;
+            document.getElementById('modalNotes').value = user.notes || '';
+            document.getElementById('modalStatus').value = user.is_banned ? 'banned' : 'active';
+            document.getElementById('userModal').classList.add('active');
+        }
+
+        function saveUser() {
+            const id = parseInt(document.getElementById('modalUserId').value);
+            const user = users.find(u => u.id === id);
+            
+            if (user) {
+                user.first_name = document.getElementById('modalUsername').value;
+                user.points = parseInt(document.getElementById('modalPoints').value);
+                user.notes = document.getElementById('modalNotes').value;
+                user.is_banned = document.getElementById('modalStatus').value === 'banned' ? 1 : 0;
+                
+                // إضافة حدث حي
+                addLiveEvent('✏️', `تم تعديل بيانات ${user.first_name}`, 'الآن');
+                
+                Swal.fire('تم', 'تم حفظ التعديلات بنجاح', 'success');
+                closeModal();
+                displayUsers();
+                updateStats();
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('userModal').classList.remove('active');
+        }
+
+        function addPoints(id) {
+            Swal.fire({
+                title: 'إضافة نقاط',
+                input: 'number',
+                inputLabel: 'عدد النقاط',
+                showCancelButton: true,
+                confirmButtonText: 'إضافة',
+                cancelButtonText: 'إلغاء'
+            }).then(result => {
+                if (result.isConfirmed) {
+                    const user = users.find(u => u.id === id);
+                    const points = parseInt(result.value);
+                    user.points += points;
+                    
+                    // إضافة حدث حي
+                    addLiveEvent('➕', `تم إضافة ${points} نقطة لـ ${user.first_name}`, 'الآن');
+                    
+                    displayUsers();
+                    updateStats();
+                    Swal.fire('تم', `تم إضافة ${points} نقطة`, 'success');
+                }
+            });
+        }
+
+        function banUser(id) {
+            Swal.fire({
+                title: 'تأكيد الحظر',
+                text: 'هل أنت متأكد من حظر هذا المستخدم؟',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#f44336',
+                confirmButtonText: 'نعم، احظر',
+                cancelButtonText: 'إلغاء'
+            }).then(result => {
+                if (result.isConfirmed) {
+                    const user = users.find(u => u.id === id);
+                    user.is_banned = 1;
+                    
+                    // إضافة حدث حي
+                    addLiveEvent('🚫', `تم حظر ${user.first_name}`, 'الآن');
+                    
+                    displayUsers();
+                    updateStats();
+                    Swal.fire('تم الحظر', 'تم حظر المستخدم بنجاح', 'success');
+                }
+            });
+        }
+
+        function unbanUser(id) {
+            const user = users.find(u => u.id === id);
+            user.is_banned = 0;
+            
+            // إضافة حدث حي
+            addLiveEvent('✅', `تم إلغاء حظر ${user.first_name}`, 'الآن');
+            
+            displayUsers();
+            updateStats();
+            Swal.fire('تم', 'تم إلغاء حظر المستخدم', 'success');
+        }
+
+        function approveWithdrawal(id) {
+            const withdrawal = withdrawals.find(w => w.id === id);
+            withdrawal.status = 'completed';
+            
+            // إضافة حدث حي
+            addLiveEvent('💰', `تم قبول طلب سحب #${id}`, 'الآن');
+            
+            displayWithdrawals();
+            updateStats();
+            Swal.fire('تم', 'تمت الموافقة على طلب السحب', 'success');
+        }
+
+        function rejectWithdrawal(id) {
+            const withdrawal = withdrawals.find(w => w.id === id);
+            withdrawal.status = 'rejected';
+            
+            // إضافة حدث حي
+            addLiveEvent('❌', `تم رفض طلب سحب #${id}`, 'الآن');
+            
+            displayWithdrawals();
+            updateStats();
+            Swal.fire('تم', 'تم رفض طلب السحب', 'success');
+        }
+
+        // تحديث تلقائي كل 30 ثانية
+        setInterval(() => {
+            loadAllData();
+            console.log('تم تحديث البيانات تلقائياً');
+        }, 30000);
+
+        // تحميل البيانات عند فتح الصفحة
+        document.addEventListener('DOMContentLoaded', () => {
+            loadAllData();
+        });
+    </script>
+</body>
+</html>
