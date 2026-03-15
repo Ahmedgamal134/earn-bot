@@ -7,81 +7,76 @@ import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
-# -------------------- الإعدادات الأساسية --------------------
+# إعداد التسجيل
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+
+# التوكن من المتغيرات البيئية
 TOKEN = os.environ.get('BOT_TOKEN')
-ADMIN_IDS = [1103784347]  # ⚠️ غير هذا الرقم بمعرفك الخاص من @userinfobot
+ADMIN_IDS = [1103784347]
 
 # -------------------- دوال قاعدة البيانات --------------------
 def init_db():
     conn = sqlite3.connect('profit_bot.db')
     c = conn.cursor()
     
-    # جدول المستخدمين الأساسي
-    c.execute('''CREATE TABLE IF NOT EXISTS users (
-        user_id INTEGER PRIMARY KEY,
-        username TEXT,
-        first_name TEXT,
-        points INTEGER DEFAULT 0,
-        total_earned INTEGER DEFAULT 0,
-        joined_date TEXT,
-        referrer_id INTEGER DEFAULT NULL,
-        total_referrals INTEGER DEFAULT 0,
-        referral_earned INTEGER DEFAULT 0,
-        is_banned INTEGER DEFAULT 0,
-        ban_reason TEXT DEFAULT NULL,
-        notes TEXT DEFAULT NULL)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS users
+                 (user_id INTEGER PRIMARY KEY,
+                  username TEXT,
+                  first_name TEXT,
+                  points INTEGER DEFAULT 0,
+                  total_earned INTEGER DEFAULT 0,
+                  joined_date TEXT,
+                  referrer_id INTEGER DEFAULT NULL,
+                  total_referrals INTEGER DEFAULT 0,
+                  referral_earned INTEGER DEFAULT 0,
+                  is_banned INTEGER DEFAULT 0,
+                  ban_reason TEXT DEFAULT NULL,
+                  notes TEXT DEFAULT NULL)''')
     
-    # جدول الإعلانات اليومية
-    c.execute('''CREATE TABLE IF NOT EXISTS ads (
-        user_id INTEGER,
-        ad_date TEXT,
-        ad_count INTEGER DEFAULT 0,
-        UNIQUE(user_id, ad_date))''')
+    c.execute('''CREATE TABLE IF NOT EXISTS ads
+                 (user_id INTEGER,
+                  ad_date TEXT,
+                  ad_count INTEGER DEFAULT 0,
+                  UNIQUE(user_id, ad_date))''')
     
-    # جدول التسجيل اليومي (Check-in)
-    c.execute('''CREATE TABLE IF NOT EXISTS daily_checkin (
-        user_id INTEGER,
-        check_date TEXT,
-        streak INTEGER DEFAULT 1,
-        UNIQUE(user_id, check_date))''')
+    c.execute('''CREATE TABLE IF NOT EXISTS daily_checkin
+                 (user_id INTEGER,
+                  check_date TEXT,
+                  streak INTEGER DEFAULT 1,
+                  UNIQUE(user_id, check_date))''')
     
-    # جدول طلبات السحب
-    c.execute('''CREATE TABLE IF NOT EXISTS withdrawals (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        amount REAL,
-        wallet_type TEXT,
-        wallet_number TEXT,
-        transaction_id TEXT,
-        status TEXT DEFAULT 'قيد الانتظار',
-        request_date TEXT,
-        process_date TEXT DEFAULT NULL)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS withdrawals
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  user_id INTEGER,
+                  amount REAL,
+                  wallet_type TEXT,
+                  wallet_number TEXT,
+                  transaction_id TEXT,
+                  status TEXT DEFAULT 'قيد الانتظار',
+                  request_date TEXT,
+                  process_date TEXT DEFAULT NULL)''')
     
-    # جدول المحافظ الإلكترونية للمستخدمين
-    c.execute('''CREATE TABLE IF NOT EXISTS wallets (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        wallet_type TEXT,
-        wallet_number TEXT,
-        is_default INTEGER DEFAULT 0,
-        added_date TEXT,
-        UNIQUE(user_id, wallet_type, wallet_number))''')
+    c.execute('''CREATE TABLE IF NOT EXISTS wallets
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  user_id INTEGER,
+                  wallet_type TEXT,
+                  wallet_number TEXT,
+                  is_default INTEGER DEFAULT 0,
+                  added_date TEXT,
+                  UNIQUE(user_id, wallet_type, wallet_number))''')
     
-    # جدول سجل إجراءات المشرفين
-    c.execute('''CREATE TABLE IF NOT EXISTS admin_logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        admin_id INTEGER,
-        action TEXT,
-        target_user INTEGER,
-        details TEXT,
-        action_date TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS admin_logs
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  admin_id INTEGER,
+                  action TEXT,
+                  target_user INTEGER,
+                  details TEXT,
+                  action_date TEXT)''')
     
     conn.commit()
     conn.close()
-    print("✅ تم إنشاء/تحديث قاعدة البيانات.")
+    print("✅ تم إنشاء قاعدة البيانات")
 
-# -------------------- دوال مساعدة --------------------
 def get_user(user_id):
     conn = sqlite3.connect('profit_bot.db')
     c = conn.cursor()
@@ -102,15 +97,21 @@ def create_user(user_id, username, first_name, referrer_id=None):
     conn = sqlite3.connect('profit_bot.db')
     c = conn.cursor()
     
-    # التحقق من وجود المستخدم
     c.execute("SELECT * FROM users WHERE user_id=?", (user_id,))
     if c.fetchone():
         conn.close()
         return
     
-    c.execute('''INSERT INTO users (user_id, username, first_name, joined_date, referrer_id) 
+    c.execute('''INSERT INTO users 
+                 (user_id, username, first_name, joined_date, referrer_id) 
                  VALUES (?, ?, ?, ?, ?)''',
               (user_id, username, first_name, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), referrer_id))
+    
+    if referrer_id and referrer_id != user_id:
+        c.execute("SELECT is_banned FROM users WHERE user_id=?", (referrer_id,))
+        referrer = c.fetchone()
+        if referrer and not referrer[0]:
+            c.execute("UPDATE users SET points = points + 80, total_referrals = total_referrals + 1, referral_earned = referral_earned + 80 WHERE user_id=?", (referrer_id,))
     
     conn.commit()
     conn.close()
@@ -120,7 +121,6 @@ def update_points(user_id, points_to_add):
         conn = sqlite3.connect('profit_bot.db')
         c = conn.cursor()
         
-        # التحقق من أن المستخدم غير محظور
         c.execute("SELECT is_banned FROM users WHERE user_id=?", (user_id,))
         user = c.fetchone()
         if user and user[0]:
@@ -135,7 +135,7 @@ def update_points(user_id, points_to_add):
         conn.close()
         return True, new_points, "تم"
     except Exception as e:
-        print(f"❌ خطأ في تحديث النقاط: {e}")
+        print(f"❌ خطأ في إضافة النقاط: {e}")
         return False, 0, str(e)
 
 def log_admin_action(admin_id, action, target_user, details=""):
@@ -147,9 +147,8 @@ def log_admin_action(admin_id, action, target_user, details=""):
     conn.commit()
     conn.close()
 
-# -------------------- إشعارات للمشرفين --------------------
+# -------------------- إشعارات المشرفين --------------------
 async def notify_admin(context, user_id, action, details):
-    """إرسال إشعار فوري للمشرف عند أي نشاط جديد"""
     conn = sqlite3.connect('profit_bot.db')
     c = conn.cursor()
     c.execute("SELECT first_name, points FROM users WHERE user_id=?", (user_id,))
@@ -217,7 +216,6 @@ async def view_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ المستخدم غير موجود")
             return
         
-        # جلب المحافظ
         conn = sqlite3.connect('profit_bot.db')
         c = conn.cursor()
         c.execute("SELECT wallet_type, wallet_number FROM wallets WHERE user_id=?", (target,))
@@ -420,9 +418,8 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn.commit()
         conn.close()
         await query.edit_message_text(f"✅ تم إلغاء حظر المستخدم {user_id}")
-    # يمكن إضافة معالجات أخرى (approve, reject, view) هنا
 
-# -------------------- أوامر المستخدمين الأساسية --------------------
+# -------------------- أوامر المستخدمين --------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
@@ -432,13 +429,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     referrer_id = int(context.args[0]) if (context.args and context.args[0].isdigit()) else None
     create_user(user_id, username, first_name, referrer_id)
     
-    # مكافأة ترحيب 10 نقاط
-    update_points(user_id, 10)
+    update_points(user_id, 10)  # مكافأة ترحيب
     await notify_admin(context, user_id, 'new_user', 'مستخدم جديد')
     
     points = get_user_points(user_id)
+    
+    # ✅ الرابط الصحيح هنا
+    mini_app_url = "https://earn-mini-appuprailwayapp-production.up.railway.app/"
+    
     keyboard = [
-        [InlineKeyboardButton("📺 مشاهدة إعلان", url="https://earn-mini-app.up.railway.app")],
+        [InlineKeyboardButton("📺 مشاهدة إعلان", url=mini_app_url)],
         [InlineKeyboardButton("💰 رصيدي", callback_data='balance'),
          InlineKeyboardButton("💳 سحب أرباح", callback_data='withdraw')]
     ]
@@ -457,7 +457,6 @@ async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def withdraw(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    # سيتم توجيه المستخدم إلى الموقع لإتمام عملية السحب
     await query.edit_message_text("🔜 سيتم تحويلك إلى الموقع لإتمام السحب.")
 
 async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -465,7 +464,7 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     await admin_panel(update, context)
 
-# -------------------- تشغيل البوت --------------------
+# -------------------- التشغيل --------------------
 def main():
     if not TOKEN:
         print("❌ خطأ: لم يتم تعيين BOT_TOKEN")
@@ -474,7 +473,6 @@ def main():
     init_db()
     app = Application.builder().token(TOKEN).build()
     
-    # أوامر المشرفين
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CommandHandler("user", view_user))
     app.add_handler(CommandHandler("add", add_points))
@@ -484,7 +482,6 @@ def main():
     app.add_handler(CommandHandler("users", list_users))
     app.add_handler(CommandHandler("withdrawals", withdrawals_list))
     
-    # أوامر المستخدمين
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(balance, pattern='balance'))
     app.add_handler(CallbackQueryHandler(withdraw, pattern='withdraw'))
