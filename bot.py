@@ -556,7 +556,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     points = get_user_points(user_id)
     
     keyboard = [
-        [InlineKeyboardButton("📺 مشاهدة إعلان", url="https://your-app.railway.app")],
+        [InlineKeyboardButton("📺 مشاهدة إعلان", url="https://earn-mini-app.up.railway.app")],
         [InlineKeyboardButton("💰 رصيدي", callback_data='balance')],
         [InlineKeyboardButton("💳 سحب أرباح", callback_data='withdraw')]
     ]
