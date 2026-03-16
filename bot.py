@@ -2,36 +2,19 @@ import logging
 import sqlite3
 from datetime import datetime
 import os
-import asyncio
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
-from telegram import (
-    Update,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    WebAppInfo
+logging.basicConfig(
+format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+level=logging.INFO
 )
-
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    CallbackQueryHandler,
-    ContextTypes,
-    MessageHandler,
-    filters
-)
-
-# ---------------- CONFIG ----------------
 
 TOKEN = os.environ.get("BOT_TOKEN")
 
 ADMIN_IDS = [1103784347]
 
 DB = "profit_bot.db"
-
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
 
 # ---------------- DATABASE ----------------
 
@@ -46,7 +29,8 @@ def init_db():
         username TEXT,
         first_name TEXT,
         points INTEGER DEFAULT 0,
-        joined_date TEXT
+        joined_date TEXT,
+        referrer INTEGER
     )
     """)
 
@@ -56,6 +40,14 @@ def init_db():
         ad_date TEXT,
         ad_count INTEGER DEFAULT 0,
         UNIQUE(user_id, ad_date)
+    )
+    """)
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS checkin(
+        user_id INTEGER,
+        check_date TEXT,
+        UNIQUE(user_id, check_date)
     )
     """)
 
@@ -70,16 +62,12 @@ def get_points(user_id):
     conn = sqlite3.connect(DB)
     c = conn.cursor()
 
-    c.execute(
-        "SELECT points FROM users WHERE user_id=?",
-        (user_id,)
-    )
-
-    result = c.fetchone()
+    c.execute("SELECT points FROM users WHERE user_id=?", (user_id,))
+    r = c.fetchone()
 
     conn.close()
 
-    return result[0] if result else 0
+    return r[0] if r else 0
 
 
 def add_points(user_id, amount):
@@ -87,42 +75,55 @@ def add_points(user_id, amount):
     conn = sqlite3.connect(DB)
     c = conn.cursor()
 
-    c.execute(
-        "UPDATE users SET points = points + ? WHERE user_id=?",
-        (amount, user_id)
-    )
+    c.execute("UPDATE users SET points = points + ? WHERE user_id=?", (amount, user_id))
 
     conn.commit()
     conn.close()
 
 
-def add_ad_watch(user_id):
+def add_ad(user_id):
 
     today = datetime.now().strftime("%Y-%m-%d")
 
     conn = sqlite3.connect(DB)
     c = conn.cursor()
 
-    c.execute(
-        "SELECT ad_count FROM ads WHERE user_id=? AND ad_date=?",
-        (user_id, today)
-    )
+    c.execute("SELECT ad_count FROM ads WHERE user_id=? AND ad_date=?", (user_id, today))
+    r = c.fetchone()
 
-    result = c.fetchone()
-
-    if result:
-
-        c.execute(
-            "UPDATE ads SET ad_count = ad_count + 1 WHERE user_id=? AND ad_date=?",
-            (user_id, today)
-        )
-
+    if r:
+        c.execute("UPDATE ads SET ad_count = ad_count + 1 WHERE user_id=? AND ad_date=?", (user_id, today))
     else:
+        c.execute("INSERT INTO ads VALUES(?,?,1)", (user_id, today))
 
-        c.execute(
-            "INSERT INTO ads VALUES(?,?,1)",
-            (user_id, today)
-        )
+    conn.commit()
+    conn.close()
+
+
+def can_checkin(user_id):
+
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
+
+    c.execute("SELECT * FROM checkin WHERE user_id=? AND check_date=?", (user_id, today))
+
+    r = c.fetchone()
+
+    conn.close()
+
+    return r is None
+
+
+def add_checkin(user_id):
+
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
+
+    c.execute("INSERT INTO checkin VALUES(?,?)", (user_id, today))
 
     conn.commit()
     conn.close()
@@ -133,19 +134,24 @@ def add_ad_watch(user_id):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = update.effective_user
+    ref = None
+
+    if context.args:
+        ref = int(context.args[0])
 
     conn = sqlite3.connect(DB)
     c = conn.cursor()
 
     c.execute("""
-    INSERT OR IGNORE INTO users(user_id,username,first_name,joined_date)
-    VALUES(?,?,?,?)
+    INSERT OR IGNORE INTO users(user_id,username,first_name,joined_date,referrer)
+    VALUES(?,?,?,?,?)
     """,
     (
         user.id,
         user.username,
         user.first_name,
-        datetime.now().strftime("%Y-%m-%d")
+        datetime.now().strftime("%Y-%m-%d"),
+        ref
     ))
 
     conn.commit()
@@ -175,17 +181,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
 
-        f"""
-🎉 أهلا {user.first_name}
+f"""
+🎉 أهلاً {user.first_name}
 
-💰 رصيدك : {points} نقطة
-        """,
+💰 رصيدك: {points} نقطة
+""",
 
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+reply_markup=InlineKeyboardMarkup(keyboard)
+
+)
 
 
-# ---------------- BUTTONS ----------------
+# ---------------- BALANCE ----------------
 
 async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -196,45 +203,68 @@ async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     points = get_points(user_id)
 
-    await query.edit_message_text(
-        f"💰 رصيدك الحالي: {points} نقطة"
-    )
+    await query.edit_message_text(f"💰 رصيدك: {points} نقطة")
 
 
-# ---------------- MINI APP DATA ----------------
+# ---------------- MINI APP HANDLER ----------------
 
-async def webapp_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def webapp(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = update.message.web_app_data.data
     user_id = update.effective_user.id
 
+    # مشاهدة اعلان
+
     if data == "watch_ad":
 
-        await update.message.reply_text("⏳ شاهد الإعلان لمدة 15 ثانية")
-
-        await asyncio.sleep(15)
-
-        add_ad_watch(user_id)
-
+        add_ad(user_id)
         add_points(user_id, 1)
 
-        await update.message.reply_text("✅ تم إضافة +1 نقطة")
+        await update.message.reply_text("📺 تمت مشاهدة الإعلان +1 نقطة")
+
+    # تسجيل يومي
+
+    elif data == "checkin":
+
+        if not can_checkin(user_id):
+
+            await update.message.reply_text("🎁 سجلت اليوم بالفعل")
+
+            return
+
+        add_checkin(user_id)
+
+        add_points(user_id, 5)
+
+        await update.message.reply_text("🎁 تسجيل يومي +5 نقاط")
+
+    # الرصيد
 
     elif data == "balance":
 
         points = get_points(user_id)
 
-        await update.message.reply_text(
-            f"💰 رصيدك: {points}"
-        )
+        await update.message.reply_text(f"💰 رصيدك: {points}")
 
-    elif data == "checkin":
+    # عجلة الحظ
 
-        add_points(user_id, 5)
+    elif data.startswith("wheel_"):
 
-        await update.message.reply_text(
-            "✅ تسجيل يومي +5 نقاط"
-        )
+        reward = int(data.split("_")[1])
+
+        add_points(user_id, reward)
+
+        await update.message.reply_text(f"🎡 ربحت {reward} نقاط")
+
+    # دعوة الاصدقاء
+
+    elif data == "refer":
+
+        bot = await context.bot.get_me()
+
+        link = f"https://t.me/{bot.username}?start={user_id}"
+
+        await update.message.reply_text(f"👥 رابط الدعوة:\n{link}")
 
 
 # ---------------- ADMIN ----------------
@@ -248,23 +278,24 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     c = conn.cursor()
 
     c.execute("SELECT COUNT(*) FROM users")
-    total_users = c.fetchone()[0]
+    users = c.fetchone()[0]
 
     c.execute("SELECT SUM(points) FROM users")
-    total_points = c.fetchone()[0]
+    points = c.fetchone()[0]
 
     conn.close()
 
     await update.message.reply_text(
 
-        f"""
+f"""
 📊 الإحصائيات
 
-👥 عدد المستخدمين: {total_users}
+👥 المستخدمين: {users}
 
-💰 مجموع النقاط: {total_points}
-        """
-    )
+💰 مجموع النقاط: {points}
+"""
+
+)
 
 
 # ---------------- MAIN ----------------
@@ -272,9 +303,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
 
     if not TOKEN:
-
         print("❌ BOT TOKEN NOT FOUND")
-
         return
 
     init_db()
@@ -285,21 +314,16 @@ def main():
 
     app.add_handler(CommandHandler("stats", stats))
 
-    app.add_handler(
-        CallbackQueryHandler(
-            balance,
-            pattern="balance"
-        )
-    )
+    app.add_handler(CallbackQueryHandler(balance, pattern="balance"))
 
     app.add_handler(
         MessageHandler(
             filters.StatusUpdate.WEB_APP_DATA,
-            webapp_handler
+            webapp
         )
     )
 
-    print("✅ BOT RUNNING...")
+    print("✅ BOT RUNNING")
 
     app.run_polling()
 
