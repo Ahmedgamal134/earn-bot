@@ -65,14 +65,6 @@ def init_db():
                   request_date TEXT,
                   process_date TEXT DEFAULT NULL)''')
     
-    # جدول الإعلانات النصية (المحتوى)
-    c.execute('''CREATE TABLE IF NOT EXISTS ads_content
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  ad_text TEXT,
-                  ad_link TEXT,
-                  ad_type TEXT DEFAULT 'text',
-                  is_active INTEGER DEFAULT 1)''')
-    
     # جدول الدعوات (للتأكد من الدعوات الحقيقية)
     c.execute('''CREATE TABLE IF NOT EXISTS referrals
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -195,7 +187,6 @@ def add_ad_watch(user_id):
         else:
             c.execute("UPDATE ads SET ad_count = ad_count + 1 WHERE user_id=? AND ad_date=?", (user_id, today))
         
-        # تحديث عدد الإعلانات اليومية في جدول المستخدمين
         c.execute("UPDATE users SET ads_watched_today = ads_watched_today + 1, last_ad_date=? WHERE user_id=?", (today, user_id))
         
         conn.commit()
@@ -228,7 +219,6 @@ def add_checkin(user_id):
     c = conn.cursor()
     today = datetime.now().strftime('%Y-%m-%d')
     
-    # جلب آخر تسجيل
     c.execute('''SELECT check_date, streak FROM daily_checkin 
                  WHERE user_id=? ORDER BY check_date DESC LIMIT 1''', (user_id,))
     last = c.fetchone()
@@ -259,12 +249,12 @@ def get_all_users():
     """جلب كل المستخدمين (للأدمن)"""
     conn = sqlite3.connect('profit_bot.db')
     c = conn.cursor()
-    c.execute("SELECT user_id, first_name, points, total_earned, joined_date, last_active FROM users ORDER BY points DESC")
+    c.execute("SELECT user_id, first_name, points, total_earned, joined_date, last_active, is_banned FROM users ORDER BY points DESC")
     users = c.fetchall()
     conn.close()
     return users
 
-# =========== أوامر الأدمن (التحكم الكامل) ===========
+# =========== أوامر الأدمن ===========
 async def admin_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """عرض إحصائيات المستخدمين (للأدمن)"""
     if update.effective_user.id not in ADMIN_IDS:
@@ -275,11 +265,12 @@ async def admin_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     users = get_all_users()
     
     text = f"👥 **إجمالي المستخدمين:** {total_users}\n\n"
-    text += "**آخر 10 مستخدمين (حسب النقاط):**\n"
+    text += "**أكثر 10 مستخدمين (حسب النقاط):**\n"
     
     for i, user in enumerate(users[:10], 1):
-        user_id, name, points, earned, joined, last = user
-        text += f"{i}. {name} - {points} نقطة (إجمالي: {earned})\n"
+        user_id, name, points, earned, joined, last, banned = user
+        status = "🚫" if banned else "✅"
+        text += f"{i}. {name} - {points} نقطة (إجمالي: {earned}) {status}\n"
     
     await update.message.reply_text(text, parse_mode='Markdown')
 
@@ -297,6 +288,9 @@ async def admin_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ المستخدم غير موجود")
             return
         
+        # حساب النشاط اليومي
+        ads_today = get_ads_today(user_id)
+        
         text = f"👤 **بيانات المستخدم:**\n"
         text += f"🆔 المعرف: {user[0]}\n"
         text += f"👤 الاسم: {user[2]}\n"
@@ -307,6 +301,7 @@ async def admin_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text += f"🎁 أرباح الدعوات: {user[8]}\n"
         text += f"🚫 محظور؟: {'نعم' if user[11] else 'لا'}\n"
         text += f"📱 آخر نشاط: {user[12]}\n"
+        text += f"📺 إعلانات اليوم: {ads_today}\n"
         
         await update.message.reply_text(text, parse_mode='Markdown')
     except (IndexError, ValueError):
@@ -388,18 +383,13 @@ async def admin_export(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     users = get_all_users()
     
-    # إنشاء ملف CSV
-    import csv
-    from io import StringIO
-    
     output = StringIO()
     writer = csv.writer(output)
-    writer.writerow(['User ID', 'Name', 'Points', 'Total Earned', 'Joined Date', 'Last Active'])
+    writer.writerow(['User ID', 'Name', 'Points', 'Total Earned', 'Joined Date', 'Last Active', 'Banned'])
     
     for user in users:
-        writer.writerow([user[0], user[1], user[2], user[3], user[4][:10], user[5]])
+        writer.writerow([user[0], user[1], user[2], user[3], user[4][:10], user[5], 'نعم' if user[6] else 'لا'])
     
-    # إرسال الملف
     await update.message.reply_document(
         document=output.getvalue().encode('utf-8'),
         filename='users_export.csv',
@@ -447,7 +437,34 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(text, parse_mode='Markdown')
 
-# =========== أوامر البوت للمستخدمين ===========
+async def admin_withdrawals(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """عرض طلبات السحب (للأدمن)"""
+    if update.effective_user.id not in ADMIN_IDS:
+        await update.message.reply_text("⛔ هذا الأمر مخصص للأدمن فقط.")
+        return
+    
+    conn = sqlite3.connect('profit_bot.db')
+    c = conn.cursor()
+    c.execute('''SELECT * FROM withdrawals WHERE status="قيد الانتظار" ORDER BY request_date''')
+    withdrawals = c.fetchall()
+    conn.close()
+    
+    if not withdrawals:
+        text = "✅ لا توجد طلبات سحب معلقة"
+    else:
+        text = "💳 **طلبات السحب المعلقة:**\n\n"
+        for w in withdrawals:
+            text += f"🆔 #{w[0]}\n"
+            text += f"👤 مستخدم: {w[1]}\n"
+            text += f"💰 المبلغ: {w[2]:.2f} جنيه\n"
+            text += f"💳 المحفظة: {w[3]}\n"
+            text += f"📱 الرقم: {w[4]}\n"
+            text += f"📅 التاريخ: {w[6][:16]}\n"
+            text += "-" * 20 + "\n"
+    
+    await update.message.reply_text(text, parse_mode='Markdown')
+
+# =========== أوامر المستخدمين ===========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """أمر /start"""
     user = update.effective_user
@@ -466,7 +483,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             referrer_id = int(context.args[0].replace('invite_', ''))
             if referrer_id == user_id:
-                referrer_id = None  # منع دعوة النفس
+                referrer_id = None
         except:
             referrer_id = None
     
@@ -479,7 +496,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ads_today = get_ads_today(user_id)
     
     # إنشاء رابط دعوة فريد
-    invite_link = f"https://t.me/{(await context.bot.get_me()).username}?start=invite_{user_id}"
+    bot_username = (await context.bot.get_me()).username
+    invite_link = f"https://t.me/{bot_username}?start=invite_{user_id}"
     
     # الأزرار
     keyboard = [
@@ -531,7 +549,6 @@ async def watch_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # رابط موقع الإعلانات
     site_url = "https://t.me/YourTapEarnBot/Earn_App"
     
     keyboard = [
@@ -563,17 +580,14 @@ async def ad_watched(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("⛔ لقد تم حظرك من استخدام هذا البوت.")
         return
     
-    # إرسال مؤقت الانتظار
     await query.edit_message_text(
         "⏳ **جاري التحقق...**\n\n"
         "الرجاء الانتظار 15 ثانية",
         parse_mode='Markdown'
     )
     
-    # انتظر 15 ثانية
     await asyncio.sleep(15)
     
-    # تسجيل المشاهدة
     ads_today = get_ads_today(user_id)
     
     if ads_today >= 400:
@@ -585,7 +599,6 @@ async def ad_watched(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # تسجيل المشاهدة وإضافة النقاط
     success = add_ad_watch(user_id)
     if success:
         new_points = update_points(user_id, 1)
@@ -636,9 +649,8 @@ async def daily_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     update_last_active(user_id)
     streak = add_checkin(user_id)
-    new_points = update_points(user_id, 3)  # 3 نقاط (بدل 5)
+    new_points = update_points(user_id, 5)
     
-    # مكافآت إضافية للسلسلة
     bonus_message = ""
     if streak == 7:
         bonus_points = 20
@@ -652,7 +664,7 @@ async def daily_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(
         f"✅ **تسجيل يومي ناجح!**\n\n"
         f"🔥 سلسلة تسجيلك: {streak} أيام\n"
-        f"🎁 حصلت على: 3 نقاط\n"
+        f"🎁 حصلت على: 5 نقاط\n"
         f"{bonus_message}\n"
         f"💰 رصيدك الآن: {new_points} نقطة",
         reply_markup=InlineKeyboardMarkup([[
@@ -681,7 +693,6 @@ async def show_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     referrals = user[7]
     referral_earned = user[8]
     
-    # حساب قيمة النقاط بالجنيه (300 نقطة = 55 جنيه)
     egp_value = (points / 300) * 55
     
     await query.edit_message_text(
@@ -781,7 +792,6 @@ async def show_withdraw(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # حساب المبلغ بالجنيه (كل 300 نقطة = 55 جنيه)
     egp_amount = (points / 300) * 55
     
     keyboard = [
@@ -814,7 +824,6 @@ async def choose_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
         'wallet_we': 'وي كاش'
     }.get(data, 'محفظة')
     
-    # جلب النقاط وحساب المبلغ
     user = get_user(user_id)
     points = user[3] if user else 0
     egp_amount = (points / 300) * 55
@@ -860,9 +869,7 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"👥 عدد مستخدمي البوت: {total_users}\n"
         f"💰 نقاطك: {points}\n"
         f"👤 دعواتك: {referrals}\n"
-        f"📺 إعلانات اليوم: {ads_today}/400 ({ads_percent:.1f}%)\n\n"
-        f"🏆 تقدمك نحو السحب:\n"
-        f"{'█' * int(ads_percent/4)}{'░' * (25 - int(ads_percent/4))} {ads_percent:.1f}%",
+        f"📺 إعلانات اليوم: {ads_today}/400 ({ads_percent:.1f}%)",
         reply_markup=InlineKeyboardMarkup([[
             InlineKeyboardButton("🔙 القائمة", callback_data='main_menu')
         ]]),
@@ -1086,7 +1093,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # استقبال رقم المحفظة
     if context.user_data.get('awaiting_wallet'):
         wallet_number = text.strip()
-        user_id = update.effective_user.id
         wallet_type = context.user_data.get('wallet_type', 'محفظة')
         points = context.user_data.get('withdraw_points', 0)
         egp_amount = context.user_data.get('withdraw_amount', 0)
@@ -1098,7 +1104,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                      VALUES (?, ?, ?, ?, ?)''',
                   (user_id, egp_amount, wallet_type, wallet_number, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
         
-        # خصم النقاط بالكامل
         c.execute("UPDATE users SET points = 0 WHERE user_id=?", (user_id,))
         
         conn.commit()
@@ -1120,19 +1125,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # =========== تشغيل البوت ===========
 def main():
-    """تشغيل البوت"""
     if not TOKEN:
         print("❌ خطأ: لم يتم تعيين BOT_TOKEN")
         return
     
-    # إنشاء قاعدة البيانات
     init_db()
-    
-    # إنشاء التطبيق
     app = Application.builder().token(TOKEN).build()
     
-    # إضافة المعالجات
-    app.add_handler(CommandHandler("start", start))
+    # أوامر الأدمن
     app.add_handler(CommandHandler("users", admin_users))
     app.add_handler(CommandHandler("search", admin_search))
     app.add_handler(CommandHandler("addpoints", admin_add_points))
@@ -1141,10 +1141,12 @@ def main():
     app.add_handler(CommandHandler("unban", admin_unban))
     app.add_handler(CommandHandler("export", admin_export))
     app.add_handler(CommandHandler("stats", admin_stats))
+    
+    # معالجات الأزرار والرسائل
+    app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    # تشغيل البوت
     print("✅ البوت يعمل بنجاح...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
