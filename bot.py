@@ -12,13 +12,15 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 # التوكن من المتغيرات البيئية
 TOKEN = os.environ.get('BOT_TOKEN')
-ADMIN_IDS = [1103784347]
+ADMIN_IDS = [1103784347]  # ⚠️ غير الرقم ده لمعرفك من @userinfobot
 
-# -------------------- دوال قاعدة البيانات --------------------
+# =========== قاعدة البيانات ===========
 def init_db():
+    """إنشاء جداول قاعدة البيانات"""
     conn = sqlite3.connect('profit_bot.db')
     c = conn.cursor()
     
+    # جدول المستخدمين
     c.execute('''CREATE TABLE IF NOT EXISTS users
                  (user_id INTEGER PRIMARY KEY,
                   username TEXT,
@@ -29,55 +31,41 @@ def init_db():
                   referrer_id INTEGER DEFAULT NULL,
                   total_referrals INTEGER DEFAULT 0,
                   referral_earned INTEGER DEFAULT 0,
-                  is_banned INTEGER DEFAULT 0,
-                  ban_reason TEXT DEFAULT NULL,
-                  notes TEXT DEFAULT NULL)''')
+                  phone_number TEXT DEFAULT NULL,
+                  is_admin INTEGER DEFAULT 0)''')
     
+    # جدول الإعلانات (عدد المشاهدات)
     c.execute('''CREATE TABLE IF NOT EXISTS ads
                  (user_id INTEGER,
                   ad_date TEXT,
                   ad_count INTEGER DEFAULT 0,
                   UNIQUE(user_id, ad_date))''')
     
+    # جدول التسجيل اليومي
     c.execute('''CREATE TABLE IF NOT EXISTS daily_checkin
                  (user_id INTEGER,
                   check_date TEXT,
                   streak INTEGER DEFAULT 1,
                   UNIQUE(user_id, check_date))''')
     
+    # جدول طلبات السحب
     c.execute('''CREATE TABLE IF NOT EXISTS withdrawals
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   user_id INTEGER,
                   amount REAL,
                   wallet_type TEXT,
                   wallet_number TEXT,
-                  transaction_id TEXT,
                   status TEXT DEFAULT 'قيد الانتظار',
                   request_date TEXT,
                   process_date TEXT DEFAULT NULL)''')
-    
-    c.execute('''CREATE TABLE IF NOT EXISTS wallets
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  user_id INTEGER,
-                  wallet_type TEXT,
-                  wallet_number TEXT,
-                  is_default INTEGER DEFAULT 0,
-                  added_date TEXT,
-                  UNIQUE(user_id, wallet_type, wallet_number))''')
-    
-    c.execute('''CREATE TABLE IF NOT EXISTS admin_logs
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  admin_id INTEGER,
-                  action TEXT,
-                  target_user INTEGER,
-                  details TEXT,
-                  action_date TEXT)''')
     
     conn.commit()
     conn.close()
     print("✅ تم إنشاء قاعدة البيانات")
 
+# =========== دوال مساعدة ===========
 def get_user(user_id):
+    """جلب بيانات المستخدم"""
     conn = sqlite3.connect('profit_bot.db')
     c = conn.cursor()
     c.execute("SELECT * FROM users WHERE user_id=?", (user_id,))
@@ -86,6 +74,7 @@ def get_user(user_id):
     return user
 
 def get_user_points(user_id):
+    """جلب نقاط المستخدم"""
     conn = sqlite3.connect('profit_bot.db')
     c = conn.cursor()
     c.execute("SELECT points FROM users WHERE user_id=?", (user_id,))
@@ -94,377 +83,750 @@ def get_user_points(user_id):
     return result[0] if result else 0
 
 def create_user(user_id, username, first_name, referrer_id=None):
+    """إنشاء مستخدم جديد"""
     conn = sqlite3.connect('profit_bot.db')
     c = conn.cursor()
-    
-    c.execute("SELECT * FROM users WHERE user_id=?", (user_id,))
-    if c.fetchone():
-        conn.close()
-        return
-    
-    c.execute('''INSERT INTO users 
+    c.execute('''INSERT OR IGNORE INTO users 
                  (user_id, username, first_name, joined_date, referrer_id) 
                  VALUES (?, ?, ?, ?, ?)''',
               (user_id, username, first_name, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), referrer_id))
     
+    # لو في دعوة، نضيف نقاط للداعي
     if referrer_id and referrer_id != user_id:
-        c.execute("SELECT is_banned FROM users WHERE user_id=?", (referrer_id,))
-        referrer = c.fetchone()
-        if referrer and not referrer[0]:
-            c.execute("UPDATE users SET points = points + 80, total_referrals = total_referrals + 1, referral_earned = referral_earned + 80 WHERE user_id=?", (referrer_id,))
+        c.execute("UPDATE users SET points = points + 80, total_referrals = total_referrals + 1, referral_earned = referral_earned + 80 WHERE user_id=?", (referrer_id,))
     
     conn.commit()
     conn.close()
 
 def update_points(user_id, points_to_add):
+    """إضافة نقاط للمستخدم"""
     try:
         conn = sqlite3.connect('profit_bot.db')
         c = conn.cursor()
-        
-        c.execute("SELECT is_banned FROM users WHERE user_id=?", (user_id,))
-        user = c.fetchone()
-        if user and user[0]:
-            conn.close()
-            return False, 0, "محظور"
-        
         c.execute("UPDATE users SET points = points + ?, total_earned = total_earned + ? WHERE user_id=?", 
                   (points_to_add, points_to_add, user_id))
         c.execute("SELECT points FROM users WHERE user_id=?", (user_id,))
         new_points = c.fetchone()[0]
         conn.commit()
         conn.close()
-        return True, new_points, "تم"
+        print(f"✅ تم إضافة {points_to_add} نقاط للمستخدم {user_id}")
+        return new_points
     except Exception as e:
         print(f"❌ خطأ في إضافة النقاط: {e}")
-        return False, 0, str(e)
+        return 0
 
-def log_admin_action(admin_id, action, target_user, details=""):
+def get_ads_today(user_id):
+    """جلب عدد الإعلانات اللي شاهدها المستخدم اليوم"""
     conn = sqlite3.connect('profit_bot.db')
     c = conn.cursor()
-    c.execute('''INSERT INTO admin_logs (admin_id, action, target_user, details, action_date)
-                 VALUES (?, ?, ?, ?, ?)''',
-              (admin_id, action, target_user, details, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+    today = datetime.now().strftime('%Y-%m-%d')
+    c.execute("SELECT ad_count FROM ads WHERE user_id=? AND ad_date=?", (user_id, today))
+    result = c.fetchone()
+    conn.close()
+    return result[0] if result else 0
+
+def add_ad_watch(user_id):
+    """تسجيل مشاهدة إعلان"""
+    try:
+        conn = sqlite3.connect('profit_bot.db')
+        c = conn.cursor()
+        today = datetime.now().strftime('%Y-%m-%d')
+        
+        c.execute("SELECT ad_count FROM ads WHERE user_id=? AND ad_date=?", (user_id, today))
+        result = c.fetchone()
+        
+        if not result:
+            c.execute("INSERT INTO ads (user_id, ad_date, ad_count) VALUES (?, ?, ?)", (user_id, today, 1))
+        else:
+            c.execute("UPDATE ads SET ad_count = ad_count + 1 WHERE user_id=? AND ad_date=?", (user_id, today))
+        
+        conn.commit()
+        conn.close()
+        print(f"✅ تم تسجيل مشاهدة إعلان للمستخدم {user_id}")
+        return True
+    except Exception as e:
+        print(f"❌ خطأ في تسجيل المشاهدة: {e}")
+        return False
+
+def can_checkin(user_id):
+    """التحقق من إمكانية تسجيل الدخول اليومي"""
+    conn = sqlite3.connect('profit_bot.db')
+    c = conn.cursor()
+    today = datetime.now().strftime('%Y-%m-%d')
+    c.execute("SELECT * FROM daily_checkin WHERE user_id=? AND check_date=?", (user_id, today))
+    result = c.fetchone()
+    conn.close()
+    return result is None
+
+def add_checkin(user_id):
+    """تسجيل دخول يومي"""
+    conn = sqlite3.connect('profit_bot.db')
+    c = conn.cursor()
+    today = datetime.now().strftime('%Y-%m-%d')
+    
+    # جلب آخر تسجيل
+    c.execute('''SELECT check_date, streak FROM daily_checkin 
+                 WHERE user_id=? ORDER BY check_date DESC LIMIT 1''', (user_id,))
+    last = c.fetchone()
+    
+    yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    
+    if last and last[0] == yesterday:
+        streak = last[1] + 1
+    else:
+        streak = 1
+    
+    c.execute("INSERT INTO daily_checkin (user_id, check_date, streak) VALUES (?, ?, ?)",
+              (user_id, today, streak))
     conn.commit()
     conn.close()
+    return streak
 
-# -------------------- إشعارات المشرفين --------------------
-async def notify_admin(context, user_id, action, details):
+def get_total_users():
+    """جلب عدد المستخدمين الكلي"""
     conn = sqlite3.connect('profit_bot.db')
     c = conn.cursor()
-    c.execute("SELECT first_name, points FROM users WHERE user_id=?", (user_id,))
-    user = c.fetchone()
+    c.execute("SELECT COUNT(*) FROM users")
+    count = c.fetchone()[0]
     conn.close()
-    
-    if not user:
-        return
-    
-    name, points = user
-    icons = {'watch_ad': '📺', 'daily_checkin': '✅', 'wheel_spin': '🎡', 'withdraw_request': '💳', 'new_user': '🆕'}
-    icon = icons.get(action, '🔔')
-    
-    message = (f"{icon} **نشاط جديد**\n\n"
-               f"👤 **المستخدم:** {name}\n"
-               f"🆔 **المعرف:** `{user_id}`\n"
-               f"⚡ **الإجراء:** {action}\n"
-               f"📝 **التفاصيل:** {details}\n"
-               f"💰 **الرصيد الحالي:** {points}\n"
-               f"🕐 **الوقت:** {datetime.now().strftime('%H:%M:%S')}")
-    
-    keyboard = [[
-        InlineKeyboardButton("👤 عرض المستخدم", callback_data=f"view_{user_id}"),
-        InlineKeyboardButton("💰 تعديل الرصيد", callback_data=f"points_{user_id}")
-    ], [
-        InlineKeyboardButton("🚫 حظر", callback_data=f"ban_{user_id}"),
-        InlineKeyboardButton("✅ إلغاء حظر", callback_data=f"unban_{user_id}")
-    ]]
-    
-    for admin_id in ADMIN_IDS:
-        try:
-            await context.bot.send_message(admin_id, message,
-                                           reply_markup=InlineKeyboardMarkup(keyboard),
-                                           parse_mode='Markdown')
-        except:
-            pass
+    return count
 
-# -------------------- أوامر المشرفين --------------------
-async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id not in ADMIN_IDS:
-        await update.message.reply_text("⛔ هذا الأمر للمشرفين فقط")
+# =========== أوامر البوت ===========
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """أمر /start"""
+    user = update.effective_user
+    user_id = user.id
+    username = user.username or "لا يوجد"
+    first_name = user.first_name or "مستخدم"
+    
+    # التحقق من وجود دعوة
+    referrer_id = None
+    if context.args and context.args[0].isdigit():
+        referrer_id = int(context.args[0])
+    
+    # إنشاء المستخدم لو مش موجود
+    create_user(user_id, username, first_name, referrer_id)
+    
+    # جلب البيانات
+    points = get_user_points(user_id)
+    ads_today = get_ads_today(user_id)
+    
+    # الأزرار العادية
+    keyboard = [
+        [InlineKeyboardButton("📺 مشاهدة إعلان", callback_data='watch_ad')],
+        [InlineKeyboardButton("✅ تسجيل يومي", callback_data='daily_checkin'),
+         InlineKeyboardButton("💰 رصيدي", callback_data='balance')],
+        [InlineKeyboardButton("👥 دعوة أصدقاء", callback_data='refer'),
+         InlineKeyboardButton("💳 سحب أرباح", callback_data='withdraw')],
+        [InlineKeyboardButton("📊 الإحصائيات", callback_data='stats')]
+    ]
+    
+    # لو المستخدم أدمن، ضيف زر التحكم
+    if user_id in ADMIN_IDS:
+        keyboard.append([InlineKeyboardButton("⚙️ لوحة التحكم", callback_data='admin_panel')])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text(
+        f"🎉 أهلاً بك في **بوت الربح الذكي** يا {first_name}!\n\n"
+        f"📊 إعلانات اليوم: {ads_today}/400\n"
+        f"💰 رصيدك: {points} نقطة\n\n"
+        f"💡 كل 300 نقطة = 55 جنيه (سحب مفتوح)\n\n"
+        "اختر من القائمة 👇",
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
+
+async def watch_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """بدء مشاهدة إعلان"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    ads_today = get_ads_today(user_id)
+    
+    if ads_today >= 400:
+        await query.edit_message_text(
+            "❌ لقد استنفدت حد الإعلانات اليومي",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 القائمة", callback_data='main_menu')
+            ]])
+        )
         return
     
     keyboard = [
-        [InlineKeyboardButton("👥 كل المستخدمين", callback_data='list_users_1')],
-        [InlineKeyboardButton("💰 إدارة النقاط", callback_data='points_menu')],
-        [InlineKeyboardButton("🚫 إدارة الحظر", callback_data='ban_menu')],
-        [InlineKeyboardButton("💳 طلبات السحب", callback_data='withdrawals')],
-        [InlineKeyboardButton("📊 إحصائيات", callback_data='stats')],
+        [InlineKeyboardButton("🌐 الذهاب للموقع", url="https://t.me/YourTapEarnBot/Earn_App")],
+        [InlineKeyboardButton("✅ تمت المشاهدة", callback_data='check_ad_watched')],
+        [InlineKeyboardButton("🔙 إلغاء", callback_data='main_menu')]
     ]
-    await update.message.reply_text("🔰 **لوحة تحكم المشرف**\nاختر ما تريد:",
-                                    reply_markup=InlineKeyboardMarkup(keyboard),
-                                    parse_mode='Markdown')
+    
+    # تسجيل وقت بدء المشاهدة
+    context.user_data['ad_start_time'] = datetime.now()
+    context.user_data['ad_watched'] = False
+    
+    await query.edit_message_text(
+        f"📺 **مشاهدة إعلان**\n\n"
+        f"1. اضغط على 'الذهاب للموقع'\n"
+        f"2. شاهد الإعلان في الموقع\n"
+        f"3. انتظر 30 ثانية\n"
+        f"4. اضغط على 'تمت المشاهدة'\n\n"
+        f"📊 إعلانات اليوم: {ads_today}/400",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
 
-async def view_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id not in ADMIN_IDS:
-        await update.message.reply_text("⛔ غير مصرح")
+async def check_ad_watched(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """التحقق من مشاهدة الإعلان"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    
+    if 'ad_start_time' not in context.user_data:
+        await query.edit_message_text(
+            "❌ حدث خطأ، حاول مرة أخرى",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 القائمة", callback_data='main_menu')
+            ]])
+        )
         return
-    try:
-        target = int(context.args[0])
-        user = get_user(target)
-        if not user:
-            await update.message.reply_text("❌ المستخدم غير موجود")
-            return
+    
+    elapsed = (datetime.now() - context.user_data['ad_start_time']).total_seconds()
+    
+    if elapsed < 30:
+        remaining = int(30 - elapsed)
+        await query.edit_message_text(
+            f"⏳ **لم تكتمل المشاهدة بعد**\n\n"
+            f"انتظر {remaining} ثانية إضافية",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 رجوع", callback_data='watch_ad')
+            ]])
+        )
+        return
+    
+    ads_today = get_ads_today(user_id)
+    
+    if ads_today >= 400:
+        await query.edit_message_text(
+            "❌ لقد استنفدت حد الإعلانات اليومي",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 القائمة", callback_data='main_menu')
+            ]])
+        )
+        return
+    
+    success = add_ad_watch(user_id)
+    if success:
+        new_points = update_points(user_id, 1)
+        ads_today = get_ads_today(user_id)
+        ads_left = 400 - ads_today
         
-        conn = sqlite3.connect('profit_bot.db')
-        c = conn.cursor()
-        c.execute("SELECT wallet_type, wallet_number FROM wallets WHERE user_id=?", (target,))
-        wallets = c.fetchall()
-        conn.close()
+        del context.user_data['ad_start_time']
         
-        status = "✅ نشط" if not user[9] else f"🚫 محظور ({user[10]})"
-        text = (f"👤 **معلومات المستخدم**\n\n"
-                f"🆔 **المعرف:** `{user[0]}`\n"
-                f"📝 **الاسم:** {user[2]}\n"
-                f"🔰 **اليوزر:** @{user[1] if user[1] else 'لا يوجد'}\n"
-                f"💰 **النقاط:** {user[3]}\n"
-                f"📊 **إجمالي الأرباح:** {user[4]}\n"
-                f"📅 **التسجيل:** {user[5][:10]}\n"
-                f"👥 **الدعوات:** {user[7]}\n"
-                f"🔰 **الحالة:** {status}\n\n")
-        if wallets:
-            text += "💳 **المحافظ:**\n"
-            for w in wallets:
-                text += f"• {w[0]}: `{w[1]}`\n"
+        keyboard = [
+            [InlineKeyboardButton("📺 إعلان آخر", callback_data='watch_ad')],
+            [InlineKeyboardButton("🔙 القائمة", callback_data='main_menu')]
+        ]
         
-        await update.message.reply_text(text, parse_mode='Markdown')
-    except IndexError:
-        await update.message.reply_text("❌ استخدم: /user [معرف المستخدم]")
+        await query.edit_message_text(
+            f"✅ **تمت المشاهدة بنجاح!**\n\n"
+            f"🎁 +1 نقطة\n"
+            f"💰 رصيدك: {new_points} نقطة\n"
+            f"📊 إعلانات اليوم: {ads_today}/400\n"
+            f"⏳ تبقى {ads_left} إعلان",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    else:
+        await query.edit_message_text(
+            "❌ حدث خطأ، حاول مرة أخرى",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 القائمة", callback_data='main_menu')
+            ]])
+        )
 
-async def add_points(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id not in ADMIN_IDS:
-        await update.message.reply_text("⛔ غير مصرح")
-        return
-    try:
-        target = int(context.args[0])
-        points = int(context.args[1])
-        reason = ' '.join(context.args[2:]) if len(context.args) > 2 else "مكافأة"
-        
-        success, new_points, msg = update_points(target, points)
-        if success:
-            log_admin_action(user_id, "إضافة نقاط", target, f"{points} نقطة - {reason}")
-            try:
-                await context.bot.send_message(target,
-                                               f"🎁 **تم إضافة {points} نقطة إلى رصيدك!**\n"
-                                               f"السبب: {reason}\n"
-                                               f"💰 رصيدك الآن: {new_points}",
-                                               parse_mode='Markdown')
-            except:
-                pass
-            await update.message.reply_text(f"✅ تم إضافة {points} نقاط\nالرصيد الجديد: {new_points}")
-        else:
-            await update.message.reply_text(f"❌ فشل: {msg}")
-    except (IndexError, ValueError):
-        await update.message.reply_text("❌ استخدم: /add [المعرف] [النقاط] [السبب]")
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """معالج الأزرار الرئيسي"""
+    query = update.callback_query
+    data = query.data
+    
+    if data == 'watch_ad':
+        await watch_ad(update, context)
+    elif data == 'check_ad_watched':
+        await check_ad_watched(update, context)
+    elif data == 'daily_checkin':
+        await daily_checkin(update, context)
+    elif data == 'balance':
+        await show_balance(update, context)
+    elif data == 'refer':
+        await show_referral(update, context)
+    elif data == 'copy_link':
+        await copy_referral_link(update, context)
+    elif data == 'withdraw':
+        await show_withdraw(update, context)
+    elif data.startswith('wallet_'):
+        await choose_wallet(update, context)
+    elif data == 'stats':
+        await show_stats(update, context)
+    elif data == 'main_menu':
+        await main_menu(update, context)
+    elif data == 'admin_panel' and query.from_user.id in ADMIN_IDS:
+        await admin_panel(update, context)
+    elif data == 'admin_stats' and query.from_user.id in ADMIN_IDS:
+        await admin_stats(update, context)
+    elif data == 'admin_users' and query.from_user.id in ADMIN_IDS:
+        await admin_users(update, context)
+    elif data == 'admin_withdrawals' and query.from_user.id in ADMIN_IDS:
+        await admin_withdrawals(update, context)
+    elif data == 'admin_ads' and query.from_user.id in ADMIN_IDS:
+        await admin_ads(update, context)
+    elif data == 'admin_add_ad' and query.from_user.id in ADMIN_IDS:
+        await admin_add_ad(update, context)
 
-async def remove_points(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id not in ADMIN_IDS:
-        await update.message.reply_text("⛔ غير مصرح")
+async def daily_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """تسجيل يومي"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    if not can_checkin(user_id):
+        await query.edit_message_text(
+            "✅ لقد سجلت حضورك اليوم بالفعل!\n"
+            "تعال غداً للتسجيل مرة أخرى ✨",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 القائمة", callback_data='main_menu')
+            ]])
+        )
         return
-    try:
-        target = int(context.args[0])
-        points = int(context.args[1])
-        reason = ' '.join(context.args[2:]) if len(context.args) > 2 else "مخالفة"
-        
-        success, new_points, msg = update_points(target, -points)
-        if success:
-            log_admin_action(user_id, "خصم نقاط", target, f"{points} نقطة - {reason}")
-            try:
-                await context.bot.send_message(target,
-                                               f"⚠️ **تم خصم {points} نقطة من رصيدك**\n"
-                                               f"السبب: {reason}\n"
-                                               f"💰 رصيدك الآن: {new_points}",
-                                               parse_mode='Markdown')
-            except:
-                pass
-            await update.message.reply_text(f"✅ تم خصم {points} نقاط\nالرصيد الجديد: {new_points}")
-        else:
-            await update.message.reply_text(f"❌ فشل: {msg}")
-    except (IndexError, ValueError):
-        await update.message.reply_text("❌ استخدم: /remove [المعرف] [النقاط] [السبب]")
+    
+    streak = add_checkin(user_id)
+    new_points = update_points(user_id, 5)
+    
+    bonus_message = ""
+    if streak == 7:
+        bonus_points = 20
+        update_points(user_id, bonus_points)
+        bonus_message = f"\n🎉 **مبروك! أكملت أسبوع كامل! +{bonus_points} نقطة هدية!**"
+    elif streak == 30:
+        bonus_points = 100
+        update_points(user_id, bonus_points)
+        bonus_message = f"\n🔥 **إنجاز! شهر كامل! +{bonus_points} نقطة هدية!**"
+    
+    await query.edit_message_text(
+        f"✅ **تسجيل يومي ناجح!**\n\n"
+        f"🔥 سلسلة تسجيلك: {streak} أيام\n"
+        f"🎁 حصلت على: 5 نقاط\n"
+        f"{bonus_message}\n"
+        f"💰 رصيدك الآن: {new_points} نقطة",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔙 القائمة", callback_data='main_menu')
+        ]]),
+        parse_mode='Markdown'
+    )
 
-async def ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id not in ADMIN_IDS:
-        await update.message.reply_text("⛔ غير مصرح")
+async def show_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """عرض الرصيد"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    user = get_user(user_id)
+    if not user:
+        await query.edit_message_text("حدث خطأ، حاول مرة أخرى")
         return
-    try:
-        target = int(context.args[0])
-        reason = ' '.join(context.args[1:]) if len(context.args) > 1 else "مخالفة القواعد"
-        
-        conn = sqlite3.connect('profit_bot.db')
-        c = conn.cursor()
-        c.execute("UPDATE users SET is_banned=1, ban_reason=? WHERE user_id=?", (reason, target))
-        conn.commit()
-        conn.close()
-        
-        log_admin_action(user_id, "حظر", target, reason)
-        try:
-            await context.bot.send_message(target,
-                                           f"🚫 **تم حظرك من البوت**\nالسبب: {reason}",
-                                           parse_mode='Markdown')
-        except:
-            pass
-        await update.message.reply_text(f"✅ تم حظر المستخدم {target}")
-    except (IndexError, ValueError):
-        await update.message.reply_text("❌ استخدم: /ban [المعرف] [السبب]")
+    
+    points = user[3]
+    total_earned = user[4]
+    referrals = user[7]
+    referral_earned = user[8]
+    
+    egp_value = (points / 300) * 55
+    
+    await query.edit_message_text(
+        f"💰 **رصيدك الحالي**\n\n"
+        f"النقاط: {points} نقطة\n"
+        f"قيمتها: {egp_value:.2f} جنيه\n\n"
+        f"📊 إجمالي ما كسبته: {total_earned} نقطة\n"
+        f"👥 عدد دعواتك: {referrals}\n"
+        f"🎁 أرباح الدعوات: {referral_earned} نقطة\n\n"
+        f"💡 300 نقطة = 55 جنيه (سحب مفتوح)",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔙 القائمة", callback_data='main_menu')
+        ]]),
+        parse_mode='Markdown'
+    )
 
-async def unban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id not in ADMIN_IDS:
-        await update.message.reply_text("⛔ غير مصرح")
-        return
-    try:
-        target = int(context.args[0])
-        conn = sqlite3.connect('profit_bot.db')
-        c = conn.cursor()
-        c.execute("UPDATE users SET is_banned=0, ban_reason=NULL WHERE user_id=?", (target,))
-        conn.commit()
-        conn.close()
-        log_admin_action(user_id, "إلغاء حظر", target, "")
-        await update.message.reply_text(f"✅ تم إلغاء حظر المستخدم {target}")
-    except (IndexError, ValueError):
-        await update.message.reply_text("❌ استخدم: /unban [المعرف]")
+async def show_referral(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """نظام الدعوة"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    bot_username = (await context.bot.get_me()).username
+    referral_link = f"https://t.me/{bot_username}?start={user_id}"
+    
+    user = get_user(user_id)
+    referrals = user[7] if user else 0
+    referral_earned = user[8] if user else 0
+    
+    await query.edit_message_text(
+        f"👥 **نظام دعوة الأصدقاء**\n\n"
+        f"🔗 رابط الدعوة الخاص بك:\n"
+        f"`{referral_link}`\n\n"
+        f"🎁 مكافآت الدعوة:\n"
+        f"• كل صديق يسجل: 80 نقطة فوراً\n\n"
+        f"📊 إحصائياتك:\n"
+        f"• عدد الأصدقاء: {referrals}\n"
+        f"• أرباح الدعوات: {referral_earned} نقطة",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("📋 نسخ الرابط", callback_data='copy_link')],
+            [InlineKeyboardButton("🔙 القائمة", callback_data='main_menu')]
+        ]),
+        parse_mode='Markdown'
+    )
 
-async def list_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id not in ADMIN_IDS:
-        await update.message.reply_text("⛔ غير مصرح")
+async def copy_referral_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """نسخ رابط الدعوة"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    bot_username = (await context.bot.get_me()).username
+    referral_link = f"https://t.me/{bot_username}?start={user_id}"
+    
+    await query.answer("تم النسخ! أرسل الرابط لأصدقائك", show_alert=True)
+    
+    await query.edit_message_text(
+        f"👥 **نظام دعوة الأصدقاء**\n\n"
+        f"🔗 رابط الدعوة:\n"
+        f"`{referral_link}`\n\n"
+        f"تم نسخ الرابط! شاركه مع أصدقائك 🎁",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔙 القائمة", callback_data='main_menu')
+        ]]),
+        parse_mode='Markdown'
+    )
+
+async def show_withdraw(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """صفحة السحب"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    user = get_user(user_id)
+    points = user[3] if user else 0
+    
+    if points < 300:
+        points_needed = 300 - points
+        await query.edit_message_text(
+            f"💳 **سحب الأرباح**\n\n"
+            f"❌ الحد الأدنى للسحب هو 300 نقطة (55 جنيه)\n\n"
+            f"💰 رصيدك: {points} نقطة\n"
+            f"📊 ينقصك: {points_needed} نقطة",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 القائمة", callback_data='main_menu')
+            ]]),
+            parse_mode='Markdown'
+        )
         return
+    
+    egp_amount = (points / 300) * 55
+    
+    keyboard = [
+        [InlineKeyboardButton("📱 فودافون كاش", callback_data='wallet_vodafone')],
+        [InlineKeyboardButton("🟠 أورانج كاش", callback_data='wallet_orange')],
+        [InlineKeyboardButton("📞 اتصالات كاش", callback_data='wallet_etisalat')],
+        [InlineKeyboardButton("💳 وي كاش", callback_data='wallet_we')],
+        [InlineKeyboardButton("🔙 رجوع", callback_data='main_menu')]
+    ]
+    
+    await query.edit_message_text(
+        f"💳 **طلب سحب أرباح**\n\n"
+        f"💰 رصيدك: {points} نقطة\n"
+        f"💵 قيمتها: {egp_amount:.2f} جنيه\n"
+        f"اختر نوع المحفظة الإلكترونية:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+
+async def choose_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """اختيار نوع المحفظة"""
+    query = update.callback_query
+    data = query.data
+    user_id = query.from_user.id
+    
+    wallet_type = {
+        'wallet_vodafone': 'فودافون كاش',
+        'wallet_orange': 'أورانج كاش', 
+        'wallet_etisalat': 'اتصالات كاش',
+        'wallet_we': 'وي كاش'
+    }.get(data, 'محفظة')
+    
+    user = get_user(user_id)
+    points = user[3] if user else 0
+    egp_amount = (points / 300) * 55
+    
+    context.user_data['wallet_type'] = wallet_type
+    context.user_data['withdraw_amount'] = egp_amount
+    context.user_data['withdraw_points'] = points
+    context.user_data['awaiting_wallet'] = True
+    
+    await query.edit_message_text(
+        f"💳 **طلب سحب - {wallet_type}**\n\n"
+        f"💰 رصيدك: {points} نقطة\n"
+        f"💵 المبلغ المستحق: {egp_amount:.2f} جنيه\n\n"
+        f"الرجاء إرسال رقم المحفظة الخاص بك:\n"
+        f"(مثال: 01012345678)\n\n"
+        f"📌 تأكد من كتابة الرقم بشكل صحيح",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔙 رجوع", callback_data='withdraw')
+        ]]),
+        parse_mode='Markdown'
+    )
+
+async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """الإحصائيات"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    total_users = get_total_users()
+    user = get_user(user_id)
+    points = user[3] if user else 0
+    referrals = user[7] if user else 0
+    ads_today = get_ads_today(user_id)
+    
+    ads_percent = (ads_today / 400) * 100
+    
+    await query.edit_message_text(
+        f"📊 **إحصائياتك الشخصية**\n\n"
+        f"👥 عدد مستخدمي البوت: {total_users}\n"
+        f"💰 نقاطك: {points}\n"
+        f"👤 دعواتك: {referrals}\n"
+        f"📺 إعلانات اليوم: {ads_today}/400 ({ads_percent:.1f}%)",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔙 القائمة", callback_data='main_menu')
+        ]]),
+        parse_mode='Markdown'
+    )
+
+async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """الرجوع للقائمة الرئيسية"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    points = get_user_points(user_id)
+    ads_today = get_ads_today(user_id)
+    
+    keyboard = [
+        [InlineKeyboardButton("📺 مشاهدة إعلان", callback_data='watch_ad')],
+        [InlineKeyboardButton("✅ تسجيل يومي", callback_data='daily_checkin'),
+         InlineKeyboardButton("💰 رصيدي", callback_data='balance')],
+        [InlineKeyboardButton("👥 دعوة أصدقاء", callback_data='refer'),
+         InlineKeyboardButton("💳 سحب أرباح", callback_data='withdraw')],
+        [InlineKeyboardButton("📊 الإحصائيات", callback_data='stats')]
+    ]
+    
+    if user_id in ADMIN_IDS:
+        keyboard.append([InlineKeyboardButton("⚙️ لوحة التحكم", callback_data='admin_panel')])
+    
+    await query.edit_message_text(
+        f"🎯 **القائمة الرئيسية**\n\n"
+        f"📊 إعلانات اليوم: {ads_today}/400\n"
+        f"💰 رصيدك: {points} نقطة\n"
+        f"💡 300 نقطة = 55 جنيه",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+
+# =========== أوامر الأدمن ===========
+async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """لوحة تحكم الأدمن"""
+    query = update.callback_query
+    
+    keyboard = [
+        [InlineKeyboardButton("📊 إحصائيات عامة", callback_data='admin_stats')],
+        [InlineKeyboardButton("👥 عرض المستخدمين", callback_data='admin_users')],
+        [InlineKeyboardButton("💳 طلبات السحب", callback_data='admin_withdrawals')],
+        [InlineKeyboardButton("📢 إدارة الإعلانات", callback_data='admin_ads')],
+        [InlineKeyboardButton("🔙 رجوع", callback_data='main_menu')]
+    ]
+    
+    await query.edit_message_text(
+        "⚙️ **لوحة تحكم الأدمن**\n"
+        "اختر ما تريد:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+
+async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """إحصائيات عامة للأدمن"""
+    query = update.callback_query
     
     conn = sqlite3.connect('profit_bot.db')
     c = conn.cursor()
-    c.execute("SELECT user_id, first_name, points, is_banned FROM users ORDER BY points DESC LIMIT 20")
-    users = c.fetchall()
-    total = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    
+    total_users = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    total_points = c.execute("SELECT SUM(points) FROM users").fetchone()[0] or 0
+    pending_withdrawals = c.execute("SELECT COUNT(*) FROM withdrawals WHERE status='قيد الانتظار'").fetchone()[0]
+    
     conn.close()
     
-    text = f"📋 **آخر 20 مستخدم** (الإجمالي: {total})\n\n"
-    for u in users:
-        status = "🚫" if u[3] else "✅"
-        text += f"{status} `{u[0]}` - {u[1]} - {u[2]} نقطة\n"
-    await update.message.reply_text(text, parse_mode='Markdown')
+    await query.edit_message_text(
+        f"📊 **إحصائيات عامة**\n\n"
+        f"👥 إجمالي المستخدمين: {total_users}\n"
+        f"💰 إجمالي النقاط: {total_points}\n"
+        f"⏳ طلبات سحب معلقة: {pending_withdrawals}",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔙 رجوع", callback_data='admin_panel')
+        ]]),
+        parse_mode='Markdown'
+    )
 
-async def withdrawals_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id not in ADMIN_IDS:
-        await update.message.reply_text("⛔ غير مصرح")
-        return
+async def admin_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """عرض المستخدمين للأدمن"""
+    query = update.callback_query
     
     conn = sqlite3.connect('profit_bot.db')
     c = conn.cursor()
-    c.execute('''SELECT w.*, u.first_name FROM withdrawals w 
-                 JOIN users u ON w.user_id = u.user_id 
-                 WHERE w.status="قيد الانتظار" ORDER BY w.request_date''')
-    withdrawals = c.fetchall()
+    users = c.execute('''SELECT user_id, first_name, points, total_referrals 
+                         FROM users ORDER BY points DESC LIMIT 10''').fetchall()
+    conn.close()
+    
+    text = "👥 **أكثر 10 مستخدمين نقاطاً:**\n\n"
+    for i, u in enumerate(users, 1):
+        text += f"{i}. {u[1]} - {u[2]} نقطة - {u[3]} دعوات\n"
+    
+    await query.edit_message_text(
+        text,
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔙 رجوع", callback_data='admin_panel')
+        ]]),
+        parse_mode='Markdown'
+    )
+
+async def admin_withdrawals(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """عرض طلبات السحب للأدمن"""
+    query = update.callback_query
+    
+    conn = sqlite3.connect('profit_bot.db')
+    c = conn.cursor()
+    withdrawals = c.execute('''SELECT * FROM withdrawals WHERE status="قيد الانتظار" ORDER BY request_date''').fetchall()
     conn.close()
     
     if not withdrawals:
-        await update.message.reply_text("✅ لا توجد طلبات سحب معلقة")
-        return
+        text = "✅ لا توجد طلبات سحب معلقة"
+    else:
+        text = "💳 **طلبات السحب المعلقة:**\n\n"
+        for w in withdrawals:
+            text += f"🆔 #{w[0]}\n"
+            text += f"👤 مستخدم: {w[1]}\n"
+            text += f"💰 المبلغ: {w[2]:.2f} جنيه\n"
+            text += f"💳 المحفظة: {w[3]}\n"
+            text += f"📱 الرقم: {w[4]}\n"
+            text += f"📅 التاريخ: {w[6][:16]}\n"
+            text += "-" * 20 + "\n"
     
-    for w in withdrawals:
-        keyboard = [
-            [InlineKeyboardButton("✅ قبول", callback_data=f"approve_{w[0]}"),
-             InlineKeyboardButton("❌ رفض", callback_data=f"reject_{w[0]}")],
-            [InlineKeyboardButton("👤 عرض المستخدم", callback_data=f"view_{w[1]}")]
-        ]
-        text = (f"💳 **طلب سحب #{w[0]}**\n\n"
-                f"👤 {w[10]}\n"
-                f"💰 {w[2]} جنيه\n"
-                f"💳 {w[3]}\n"
-                f"📱 `{w[4]}`\n"
-                f"🆔 `{w[5]}`\n"
-                f"📅 {w[7][:16]}")
-        await update.message.reply_text(text,
-                                        reply_markup=InlineKeyboardMarkup(keyboard),
-                                        parse_mode='Markdown')
+    await query.edit_message_text(
+        text,
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔙 رجوع", callback_data='admin_panel')
+        ]]),
+        parse_mode='Markdown'
+    )
 
-async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def admin_ads(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """إدارة الإعلانات للأدمن"""
     query = update.callback_query
-    await query.answer()
     
-    admin_id = query.from_user.id
-    if admin_id not in ADMIN_IDS:
-        await query.edit_message_text("⛔ غير مصرح")
-        return
+    conn = sqlite3.connect('profit_bot.db')
+    c = conn.cursor()
+    ads = c.execute("SELECT id, ad_text, ad_link, is_active FROM ads_content").fetchall()
+    conn.close()
     
-    data = query.data
-    if data.startswith('ban_'):
-        user_id = int(data.replace('ban_', ''))
-        conn = sqlite3.connect('profit_bot.db')
-        c = conn.cursor()
-        c.execute("UPDATE users SET is_banned=1 WHERE user_id=?", (user_id,))
-        conn.commit()
-        conn.close()
-        await query.edit_message_text(f"✅ تم حظر المستخدم {user_id}")
-    elif data.startswith('unban_'):
-        user_id = int(data.replace('unban_', ''))
-        conn = sqlite3.connect('profit_bot.db')
-        c = conn.cursor()
-        c.execute("UPDATE users SET is_banned=0 WHERE user_id=?", (user_id,))
-        conn.commit()
-        conn.close()
-        await query.edit_message_text(f"✅ تم إلغاء حظر المستخدم {user_id}")
-
-# -------------------- أوامر المستخدمين --------------------
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    user_id = user.id
-    username = user.username or ""
-    first_name = user.first_name or "مستخدم"
-    
-    referrer_id = int(context.args[0]) if (context.args and context.args[0].isdigit()) else None
-    create_user(user_id, username, first_name, referrer_id)
-    
-    update_points(user_id, 10)  # مكافأة ترحيب
-    await notify_admin(context, user_id, 'new_user', 'مستخدم جديد')
-    
-    points = get_user_points(user_id)
-    
-    # ✅ الرابط الصحيح هنا
-    mini_app_url = "https://earn-mini-appuprailwayapp-production.up.railway.app/"
+    text = "📢 **إدارة الإعلانات**\n\n"
+    for ad in ads:
+        status = "✅ نشط" if ad[3] else "❌ غير نشط"
+        text += f"🆔 {ad[0]}: {ad[1]}\n{ad[2]}\nالحالة: {status}\n\n"
     
     keyboard = [
-        [InlineKeyboardButton("📺 مشاهدة إعلان", url=mini_app_url)],
-        [InlineKeyboardButton("💰 رصيدي", callback_data='balance'),
-         InlineKeyboardButton("💳 سحب أرباح", callback_data='withdraw')]
+        [InlineKeyboardButton("➕ إضافة إعلان", callback_data='admin_add_ad')],
+        [InlineKeyboardButton("🔙 رجوع", callback_data='admin_panel')]
     ]
-    if user_id in ADMIN_IDS:
-        keyboard.append([InlineKeyboardButton("⚙️ لوحة التحكم", callback_data='admin')])
     
-    await update.message.reply_text(f"🎉 أهلاً بك يا {first_name}!\n💰 رصيدك: {points} نقطة\n📱 استخدم الموقع لمشاهدة الإعلانات.",
-                                     reply_markup=InlineKeyboardMarkup(keyboard))
+    await query.edit_message_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
 
-async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def admin_add_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """إضافة إعلان جديد (الأدمن)"""
     query = update.callback_query
-    await query.answer()
-    points = get_user_points(query.from_user.id)
-    await query.edit_message_text(f"💰 رصيدك الحالي: {points} نقطة")
+    
+    context.user_data['adding_ad'] = True
+    await query.edit_message_text(
+        "📝 أرسل الإعلان الجديد بالصيغة:\n"
+        "عنوان الإعلان\n"
+        "رابط الإعلان\n\n"
+        "مثال:\n"
+        "اشترك في قناتنا\n"
+        "https://t.me/your_channel",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔙 إلغاء", callback_data='admin_ads')
+        ]])
+    )
 
-async def withdraw(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    await query.edit_message_text("🔜 سيتم تحويلك إلى الموقع لإتمام السحب.")
+# =========== دالة handle_message (معالجة الرسائل النصية) ===========
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """معالجة الرسائل النصية (مثل أرقام المحافظ)"""
+    user_id = update.effective_user.id
+    text = update.message.text
+    
+    # استقبال رقم المحفظة
+    if context.user_data.get('awaiting_wallet'):
+        wallet_number = text.strip()
+        wallet_type = context.user_data.get('wallet_type', 'محفظة')
+        points = context.user_data.get('withdraw_points', 0)
+        egp_amount = context.user_data.get('withdraw_amount', 0)
+        
+        conn = sqlite3.connect('profit_bot.db')
+        c = conn.cursor()
+        c.execute('''INSERT INTO withdrawals 
+                     (user_id, amount, wallet_type, wallet_number, request_date) 
+                     VALUES (?, ?, ?, ?, ?)''',
+                  (user_id, egp_amount, wallet_type, wallet_number, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+        c.execute("UPDATE users SET points = 0 WHERE user_id=?", (user_id,))
+        conn.commit()
+        conn.close()
+        
+        context.user_data['awaiting_wallet'] = False
+        
+        await update.message.reply_text(
+            f"✅ **تم استلام طلب السحب!**\n\n"
+            f"💰 المبلغ: {egp_amount:.2f} جنيه\n"
+            f"💳 المحفظة: {wallet_type}\n"
+            f"📱 الرقم: {wallet_number}\n\n"
+            f"سيتم مراجعة الطلب وإرسال المبلغ خلال 24 ساعة ⏳",
+            parse_mode='Markdown'
+        )
+    
+    # استقبال إعلان جديد من الأدمن
+    elif context.user_data.get('adding_ad') and user_id in ADMIN_IDS:
+        lines = text.strip().split('\n')
+        if len(lines) >= 2:
+            ad_text = lines[0]
+            ad_link = lines[1]
+            
+            conn = sqlite3.connect('profit_bot.db')
+            c = conn.cursor()
+            c.execute("INSERT INTO ads_content (ad_text, ad_link) VALUES (?, ?)", (ad_text, ad_link))
+            conn.commit()
+            conn.close()
+            
+            context.user_data['adding_ad'] = False
+            await update.message.reply_text("✅ تم إضافة الإعلان بنجاح!")
+        else:
+            await update.message.reply_text("❌ صيغة خاطئة! أرسل عنوان الإعلان ثم في سطر جديد الرابط")
+    
+    else:
+        await update.message.reply_text("استخدم الأزرار للتحكم في البوت")
 
-async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    await admin_panel(update, context)
-
-# -------------------- التشغيل --------------------
+# =========== تشغيل البوت ===========
 def main():
     if not TOKEN:
         print("❌ خطأ: لم يتم تعيين BOT_TOKEN")
@@ -473,20 +835,9 @@ def main():
     init_db()
     app = Application.builder().token(TOKEN).build()
     
-    app.add_handler(CommandHandler("admin", admin_panel))
-    app.add_handler(CommandHandler("user", view_user))
-    app.add_handler(CommandHandler("add", add_points))
-    app.add_handler(CommandHandler("remove", remove_points))
-    app.add_handler(CommandHandler("ban", ban_user))
-    app.add_handler(CommandHandler("unban", unban_user))
-    app.add_handler(CommandHandler("users", list_users))
-    app.add_handler(CommandHandler("withdrawals", withdrawals_list))
-    
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(balance, pattern='balance'))
-    app.add_handler(CallbackQueryHandler(withdraw, pattern='withdraw'))
-    app.add_handler(CallbackQueryHandler(admin, pattern='admin'))
-    app.add_handler(CallbackQueryHandler(handle_callback, pattern='^(ban_|unban_|approve_|reject_|view_)'))
+    app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     print("✅ البوت يعمل بنجاح...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
