@@ -3,10 +3,10 @@ import sqlite3
 from datetime import datetime, timedelta
 import os
 import asyncio
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 import csv
 from io import StringIO
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
 # إعداد التسجيل
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -29,7 +29,8 @@ def init_db():
                   referrer_id INTEGER DEFAULT NULL,
                   total_referrals INTEGER DEFAULT 0,
                   referral_earned INTEGER DEFAULT 0,
-                  is_banned INTEGER DEFAULT 0)''')
+                  is_banned INTEGER DEFAULT 0,
+                  last_active TEXT)''')
     
     c.execute('''CREATE TABLE IF NOT EXISTS ads
                  (user_id INTEGER,
@@ -89,13 +90,57 @@ def get_ads_today(user_id):
     conn.close()
     return result[0] if result else 0
 
+def add_ad_watch(user_id):
+    conn = sqlite3.connect('profit_bot.db')
+    c = conn.cursor()
+    today = datetime.now().strftime('%Y-%m-%d')
+    c.execute("SELECT ad_count FROM ads WHERE user_id=? AND ad_date=?", (user_id, today))
+    result = c.fetchone()
+    if not result:
+        c.execute("INSERT INTO ads (user_id, ad_date, ad_count) VALUES (?, ?, ?)", (user_id, today, 1))
+    else:
+        c.execute("UPDATE ads SET ad_count = ad_count + 1 WHERE user_id=? AND ad_date=?", (user_id, today))
+    conn.commit()
+    conn.close()
+
+def can_checkin(user_id):
+    conn = sqlite3.connect('profit_bot.db')
+    c = conn.cursor()
+    today = datetime.now().strftime('%Y-%m-%d')
+    c.execute("SELECT * FROM daily_checkin WHERE user_id=? AND check_date=?", (user_id, today))
+    result = c.fetchone()
+    conn.close()
+    return result is None
+
+def add_checkin(user_id):
+    conn = sqlite3.connect('profit_bot.db')
+    c = conn.cursor()
+    today = datetime.now().strftime('%Y-%m-%d')
+    c.execute('''SELECT check_date, streak FROM daily_checkin 
+                 WHERE user_id=? ORDER BY check_date DESC LIMIT 1''', (user_id,))
+    last = c.fetchone()
+    yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    if last and last[0] == yesterday:
+        streak = last[1] + 1
+    else:
+        streak = 1
+    c.execute("INSERT INTO daily_checkin (user_id, check_date, streak) VALUES (?, ?, ?)",
+              (user_id, today, streak))
+    conn.commit()
+    conn.close()
+    return streak
+
+def get_total_users():
+    conn = sqlite3.connect('profit_bot.db')
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM users")
+    return c.fetchone()[0]
+
 def get_all_users():
     conn = sqlite3.connect('profit_bot.db')
     c = conn.cursor()
     c.execute("SELECT user_id, first_name, points, total_earned, joined_date FROM users ORDER BY points DESC")
-    users = c.fetchall()
-    conn.close()
-    return users
+    return c.fetchall()
 
 # =========== أوامر المستخدمين ===========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -136,8 +181,10 @@ async def watch_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     site_url = "https://t.me/YourTapEarnBot/Earn_App"
-    keyboard = [[InlineKeyboardButton("🌐 شاهد الإعلان", url=site_url)],
-                [InlineKeyboardButton("✅ تمت المشاهدة", callback_data='ad_watched')]]
+    keyboard = [
+        [InlineKeyboardButton("🌐 شاهد الإعلان", url=site_url)],
+        [InlineKeyboardButton("✅ تمت المشاهدة", callback_data='ad_watched')]
+    ]
     await query.edit_message_text("📺 اختر الإعلان:", reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def ad_watched(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -146,8 +193,40 @@ async def ad_watched(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     await query.edit_message_text("⏳ انتظر 15 ثانية...")
     await asyncio.sleep(15)
+    add_ad_watch(user_id)
     update_points(user_id, 1)
-    await query.edit_message_text("✅ +1 نقطة!")
+    await query.edit_message_text("✅ +1 نقطة! استمر في الكسب.")
+
+async def daily_checkin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    if not can_checkin(user_id):
+        await query.edit_message_text("✅ لقد سجلت حضورك اليوم بالفعل!")
+        return
+    streak = add_checkin(user_id)
+    update_points(user_id, 5)
+    await query.edit_message_text(f"✅ تم التسجيل! +5 نقاط (سلسلة: {streak})")
+
+async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    points = get_user_points(user_id)
+    await query.edit_message_text(f"💰 رصيدك الحالي: {points} نقطة")
+
+async def refer(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    bot_username = (await context.bot.get_me()).username
+    link = f"https://t.me/{bot_username}?start={user_id}"
+    await query.edit_message_text(f"👥 رابط دعوتك:\n{link}")
+
+async def withdraw(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    await query.edit_message_text("💳 سيتم إضافة السحب قريبًا...")
 
 # =========== أوامر الأدمن ===========
 async def admin_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -236,10 +315,9 @@ async def admin_export(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS:
         return
+    total = get_total_users()
     conn = sqlite3.connect('profit_bot.db')
     c = conn.cursor()
-    c.execute("SELECT COUNT(*) FROM users")
-    total = c.fetchone()[0]
     c.execute("SELECT SUM(points) FROM users")
     points = c.fetchone()[0] or 0
     conn.close()
@@ -255,19 +333,58 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     await query.edit_message_text("⚙️ لوحة التحكم", reply_markup=InlineKeyboardMarkup(keyboard))
 
+async def admin_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if query.from_user.id not in ADMIN_IDS:
+        return
+    await query.answer()
+    total = get_total_users()
+    conn = sqlite3.connect('profit_bot.db')
+    c = conn.cursor()
+    c.execute("SELECT SUM(points) FROM users")
+    points = c.fetchone()[0] or 0
+    conn.close()
+    await query.edit_message_text(f"📊 إجمالي المستخدمين: {total}\n💰 إجمالي النقاط: {points}")
+
+async def admin_users_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if query.from_user.id not in ADMIN_IDS:
+        return
+    await query.answer()
+    users = get_all_users()
+    text = "👥 **المستخدمون:**\n\n"
+    for u in users[:10]:
+        text += f"👤 {u[1]}: {u[2]} نقطة\n"
+    await query.edit_message_text(text)
+
+# =========== معالج الأزرار الرئيسي (الأهم) ===========
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    await query.answer()
     data = query.data
+    
+    # أوامر المستخدمين
     if data == 'watch_ad':
         await watch_ad(update, context)
     elif data == 'ad_watched':
         await ad_watched(update, context)
+    elif data == 'daily_checkin':
+        await daily_checkin(update, context)
+    elif data == 'balance':
+        await balance(update, context)
+    elif data == 'refer':
+        await refer(update, context)
+    elif data == 'withdraw':
+        await withdraw(update, context)
+    # أوامر الأدمن
     elif data == 'admin_panel':
         await admin_panel(update, context)
     elif data == 'admin_stats':
-        await admin_stats(update, context)
+        await admin_stats_callback(update, context)
     elif data == 'admin_users':
-        await admin_users(update, context)
+        await admin_users_callback(update, context)
+    else:
+        await query.edit_message_text("❌ أمر غير معروف")
 
 # =========== تشغيل البوت ===========
 def main():
@@ -280,7 +397,7 @@ def main():
     # أوامر المستخدمين
     app.add_handler(CommandHandler("start", start))
     
-    # أوامر الأدمن
+    # أوامر الأدمن (نصية)
     app.add_handler(CommandHandler("users", admin_users))
     app.add_handler(CommandHandler("search", admin_search))
     app.add_handler(CommandHandler("addpoints", admin_addpoints))
@@ -290,6 +407,7 @@ def main():
     app.add_handler(CommandHandler("export", admin_export))
     app.add_handler(CommandHandler("stats", admin_stats))
     
+    # معالج الأزرار (الأهم)
     app.add_handler(CallbackQueryHandler(button_handler))
     
     print("✅ البوت يعمل...")
