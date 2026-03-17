@@ -9,6 +9,7 @@ DB = "profit_bot.db"
 MINI_APP_URL = "https://earn-mini-app-uprailwayapp-production.up.railway.app/"
 ADMIN_ID = 1103784347
 
+
 def init_db():
     conn = sqlite3.connect(DB, check_same_thread=False)
     c = conn.cursor()
@@ -34,6 +35,7 @@ def init_db():
     conn.commit()
     conn.close()
 
+
 def get_user_stats(user_id):
     conn = sqlite3.connect(DB, check_same_thread=False)
     c = conn.cursor()
@@ -49,12 +51,14 @@ def get_user_stats(user_id):
     conn.close()
     return result
 
+
 def update_points(user_id, amount):
     conn = sqlite3.connect(DB, check_same_thread=False)
     c = conn.cursor()
     c.execute("UPDATE users SET points = points + ? WHERE user_id = ?", (amount, user_id))
     conn.commit()
     conn.close()
+
 
 def update_spins(user_id, amount):
     conn = sqlite3.connect(DB, check_same_thread=False)
@@ -63,14 +67,15 @@ def update_spins(user_id, amount):
     conn.commit()
     conn.close()
 
-def set_daily_checkin(user_click_id):
-    user_id = user_click_id
+
+def set_daily_checkin(user_id):
     today = date.today().isoformat()
     conn = sqlite3.connect(DB, check_same_thread=False)
     c = conn.cursor()
     c.execute("UPDATE users SET daily_checkin_date = ? WHERE user_id = ?", (today, user_id))
     conn.commit()
     conn.close()
+
 
 @bot.message_handler(commands=['start'])
 def start(message):
@@ -97,6 +102,7 @@ def start(message):
 
     bot.send_message(message.chat.id, text, reply_markup=markup)
 
+
 @bot.callback_query_handler(func=lambda call: True)
 def callback(call):
     if call.data == 'stats':
@@ -111,9 +117,10 @@ def callback(call):
 اللفات: {spins}
 اليومي: {daily_status}
 الدعوات: {invites}
-السحب: جاري المعالجة"""
+السحب: معيّل"""
 
         bot.edit_message_text(text, call.message.chat.id, call.message.message_id)
+
 
 @bot.message_handler(content_types=['web_app_data'])
 def webapp_data(message):
@@ -178,6 +185,7 @@ def webapp_data(message):
 
         bot.reply_to(message, text)
 
+
 @bot.message_handler(commands=['admin'])
 def admin_panel(message):
     if message.from_user.id != ADMIN_ID:
@@ -193,18 +201,22 @@ def admin_panel(message):
     pending = c.fetchall()
     conn.close()
 
-    text = f"""🔐 لوحة التحكم
+    text = f"🔐 لوحة التحكم
 
-المستخدمين: {total_users}
-النقاط الكلية: {total_points}
+"
+    text += f"المستخدمين: {total_users}
+"
+    text += f"النقاط الكلية: {total_points}
 
-طلبات السحب:
-"""
+"
+    text += "طلبات السحب:
+"
     for w in pending:
-        text += f"- {w[2]} نقاط → {w[3]} ({w[4]})
+        text += f"- {w[2]} نقطة ← {w[3]} ({w[4]})
 "
 
     bot.reply_to(message, text)
+
 
 if __name__ == '__main__':
     init_db()
