@@ -85,7 +85,6 @@ def start(message):
     today_str = date.today().isoformat()
     daily_status = "اليوم" if daily_date == today_str else "متأخر"
 
-    # ✅ هُنا: نص كامل في سطر واحد
     text = "🚀 Earn Pro
 
 "
