@@ -87,7 +87,7 @@ def start(message):
     today_str = date.today().isoformat()
     daily_status = "اليوم" if daily_date == today_str else "متأخر"
 
-    # ❌ خطأ كان هنا: يجب أن تكون كل السلسلة مغلقة في نفس السطر
+    # ❌ خطا حدث هنا: يجب أن تكون السلسلة مغلقة
     text = "🚀 Earn Pro
 
 "
