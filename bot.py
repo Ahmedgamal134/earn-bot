@@ -9,7 +9,6 @@ DB = "profit_bot.db"
 MINI_APP_URL = "https://earn-mini-app-uprailwayapp-production.up.railway.app/"
 ADMIN_ID = 1103784347
 
-
 def init_db():
     conn = sqlite3.connect(DB, check_same_thread=False)
     c = conn.cursor()
@@ -35,7 +34,6 @@ def init_db():
     conn.commit()
     conn.close()
 
-
 def get_user_stats(user_id):
     conn = sqlite3.connect(DB, check_same_thread=False)
     c = conn.cursor()
@@ -51,7 +49,6 @@ def get_user_stats(user_id):
     conn.close()
     return result
 
-
 def update_points(user_id, amount):
     conn = sqlite3.connect(DB, check_same_thread=False)
     c = conn.cursor()
@@ -59,14 +56,12 @@ def update_points(user_id, amount):
     conn.commit()
     conn.close()
 
-
 def update_spins(user_id, amount):
     conn = sqlite3.connect(DB, check_same_thread=False)
     c = conn.cursor()
     c.execute("UPDATE users SET spins = spins + ? WHERE user_id = ?", (amount, user_id))
     conn.commit()
     conn.close()
-
 
 def set_daily_checkin(user_id):
     today = date.today().isoformat()
@@ -76,7 +71,6 @@ def set_daily_checkin(user_id):
     conn.commit()
     conn.close()
 
-
 @bot.message_handler(commands=['start'])
 def start(message):
     user_id = message.from_user.id
@@ -85,6 +79,7 @@ def start(message):
     today_str = date.today().isoformat()
     daily_status = "اليوم" if daily_date == today_str else "متأخر"
 
+    # ✅ كل سطر هنا مغلق في `"`
     text = "🚀 Earn Pro
 
 "
@@ -106,7 +101,6 @@ def start(message):
     markup.row(btn2)
 
     bot.send_message(message.chat.id, text, reply_markup=markup)
-
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback(call):
@@ -131,7 +125,6 @@ def callback(call):
 
         bot.edit_message_text(text, call.message.chat.id, call.message.message_id)
 
-
 @bot.message_handler(content_types=['web_app_data'])
 def webapp_data(message):
     user_id = message.from_user.id
@@ -142,25 +135,25 @@ def webapp_data(message):
     if data == 'watch_ad':
         update_points(user_id, 5)
         update_spins(user_id, 2)
-        bot.reply_to(message, "🇪🇸 إعلان ناجح! +5 نقاط +2 لفة")
+        bot.reply_to(message, "إعلان ناجح! +5 نقاط +2 لفة")
 
     elif data.startswith('wheel_'):
         reward = int(data.split('_')[1])
         update_points(user_id, reward)
-        bot.reply_to(message, "🎉 عجلة الحظ! حصلت على " + str(reward) + " نقطة!")
+        bot.reply_to(message, "عجلة الحظ! حصلت على " + str(reward) + " نقطة!")
 
     elif data == 'daily_checkin':
         today_str = date.today().isoformat()
         if daily_date != today_str:
             set_daily_checkin(user_id)
             update_points(user_id, 10)
-            bot.reply_to(message, "📅 تسجيل يومي ناجح! +10 نقاط")
+            bot.reply_to(message, "تسجيل يومي ناجح! +10 نقاط")
         else:
             bot.reply_to(message, "لقد سجّلت اليوم بالفعل.")
 
     elif data == 'invite':
         update_points(user_id, 15)
-        bot.reply_to(message, "👥 دعوة جديدة! +15 نقطة")
+        bot.reply_to(message, "دعوة جديدة! +15 نقطة")
 
     elif data.startswith('withdraw_'):
         parts = data.split('_')
@@ -199,7 +192,6 @@ def webapp_data(message):
 
         bot.reply_to(message, text)
 
-
 @bot.message_handler(commands=['admin'])
 def admin_panel(message):
     if message.from_user.id != ADMIN_ID:
@@ -230,7 +222,6 @@ def admin_panel(message):
 "
 
     bot.reply_to(message, text)
-
 
 if __name__ == '__main__':
     init_db()
