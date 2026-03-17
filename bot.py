@@ -9,6 +9,7 @@ DB = "profit_bot.db"
 MINI_APP_URL = "https://earn-mini-app-uprailwayapp-production.up.railway.app/"
 ADMIN_ID = 1103784347
 
+
 def init_db():
     conn = sqlite3.connect(DB, check_same_thread=False)
     c = conn.cursor()
@@ -34,6 +35,7 @@ def init_db():
     conn.commit()
     conn.close()
 
+
 def get_user_stats(user_id):
     conn = sqlite3.connect(DB, check_same_thread=False)
     c = conn.cursor()
@@ -49,6 +51,7 @@ def get_user_stats(user_id):
     conn.close()
     return result
 
+
 def update_points(user_id, amount):
     conn = sqlite3.connect(DB, check_same_thread=False)
     c = conn.cursor()
@@ -56,12 +59,14 @@ def update_points(user_id, amount):
     conn.commit()
     conn.close()
 
+
 def update_spins(user_id, amount):
     conn = sqlite3.connect(DB, check_same_thread=False)
     c = conn.cursor()
     c.execute("UPDATE users SET spins = spins + ? WHERE user_id = ?", (amount, user_id))
     conn.commit()
     conn.close()
+
 
 def set_daily_checkin(user_id):
     today = date.today().isoformat()
@@ -71,6 +76,7 @@ def set_daily_checkin(user_id):
     conn.commit()
     conn.close()
 
+
 @bot.message_handler(commands=['start'])
 def start(message):
     user_id = message.from_user.id
@@ -79,17 +85,17 @@ def start(message):
     today_str = date.today().isoformat()
     daily_status = "اليوم" if daily_date == today_str else "متأخر"
 
-    # ✅ كل سطر هنا مغلق في `"`
-    text = "🚀 Earn Pro
+    # ✅ تم تغيير الاسم، لا يوجد أي سطر مقطوع في "
+    text = "🎯 POINTS BOT
 
 "
-    text += "نقاطك: " + str(points) + "
+    text += f"نقاطك: {points}
 "
-    text += "لفاتك: " + str(spins) + "
+    text += f"لفاتك: {spins}
 "
-    text += "تسجيل يومي: " + daily_status + "
+    text += f"تسجيل يومي: {daily_status}
 "
-    text += "دعوات: " + str(invites) + "
+    text += f"دعوات: {invites}
 
 "
     text += "اضغط على التطبيق لبدء الأرباح!"
@@ -102,6 +108,7 @@ def start(message):
 
     bot.send_message(message.chat.id, text, reply_markup=markup)
 
+
 @bot.callback_query_handler(func=lambda call: True)
 def callback(call):
     if call.data == 'stats':
@@ -113,17 +120,18 @@ def callback(call):
         text = "📊 حسابك
 
 "
-        text += "النقاط: " + str(points) + "
+        text += f"النقاط: {points}
 "
-        text += "اللفات: " + str(spins) + "
+        text += f"اللفات: {spins}
 "
-        text += "اليومي: " + daily_status + "
+        text += f"اليومي: {daily_status}
 "
-        text += "الدعوات: " + str(invites) + "
+        text += f"الدعوات: {invites}
 "
         text += "السحب: مُعلّق"
 
         bot.edit_message_text(text, call.message.chat.id, call.message.message_id)
+
 
 @bot.message_handler(content_types=['web_app_data'])
 def webapp_data(message):
@@ -135,25 +143,25 @@ def webapp_data(message):
     if data == 'watch_ad':
         update_points(user_id, 5)
         update_spins(user_id, 2)
-        bot.reply_to(message, "إعلان ناجح! +5 نقاط +2 لفة")
+        bot.reply_to(message, "🇪🇸 إعلان ناجح! +5 نقاط +2 لفة")
 
     elif data.startswith('wheel_'):
         reward = int(data.split('_')[1])
         update_points(user_id, reward)
-        bot.reply_to(message, "عجلة الحظ! حصلت على " + str(reward) + " نقطة!")
+        bot.reply_to(message, f"🎉 عجلة الحظ! حصلت على {reward} نقطة!")
 
     elif data == 'daily_checkin':
         today_str = date.today().isoformat()
         if daily_date != today_str:
             set_daily_checkin(user_id)
             update_points(user_id, 10)
-            bot.reply_to(message, "تسجيل يومي ناجح! +10 نقاط")
+            bot.reply_to(message, "📅 تسجيل يومي ناجح! +10 نقاط")
         else:
             bot.reply_to(message, "لقد سجّلت اليوم بالفعل.")
 
     elif data == 'invite':
         update_points(user_id, 15)
-        bot.reply_to(message, "دعوة جديدة! +15 نقطة")
+        bot.reply_to(message, "👥 دعوة جديدة! +15 نقطة")
 
     elif data.startswith('withdraw_'):
         parts = data.split('_')
@@ -182,15 +190,16 @@ def webapp_data(message):
         text = "📤 طلب السحب:
 
 "
-        text += "المبلغ: " + str(amount) + " نقطة
+        text += f"المبلغ: {amount} نقطة
 "
-        text += "الوسيلة: " + wallet_type + "
+        text += f"الوسيلة: {wallet_type}
 "
-        text += "الحساب: " + wallet_num + "
+        text += f"الحساب: {wallet_num}
 "
         text += "الحالة: مُعلّق"
 
         bot.reply_to(message, text)
+
 
 @bot.message_handler(commands=['admin'])
 def admin_panel(message):
@@ -210,18 +219,19 @@ def admin_panel(message):
     text = "🔐 لوحة التحكم
 
 "
-    text += "المستخدمين: " + str(total_users) + "
+    text += f"المستخدمين: {total_users}
 "
-    text += "النقاط الكلية: " + str(total_points) + "
+    text += f"النقاط الكلية: {total_points}
 
 "
     text += "طلبات السحب:
 "
     for w in pending:
-        text += "- " + str(w[2]) + " نقطة ← " + w[3] + " (" + w[4] + ")
+        text += f"- {w[2]} نقطة ← {w[3]} ({w[4]})
 "
 
     bot.reply_to(message, text)
+
 
 if __name__ == '__main__':
     init_db()
