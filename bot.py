@@ -63,7 +63,8 @@ def update_spins(user_id, amount):
     conn.commit()
     conn.close()
 
-def set_daily_checkin(user_id):
+def set_daily_checkin(user_click_id):
+    user_id = user_click_id
     today = date.today().isoformat()
     conn = sqlite3.connect(DB, check_same_thread=False)
     c = conn.cursor()
@@ -76,27 +77,23 @@ def start(message):
     user_id = message.from_user.id
     points, spins, daily_date, invites = get_user_stats(user_id)
 
-    markup = telebot.types.InlineKeyboardMarkup()
-    btn1 = telebot.types.InlineKeyboardButton("تطبيق الأرباح", web_app=telebot.types.WebAppInfo(url=MINI_APP_URL))
-    btn2 = telebot.types.Inline商务部utton("الحساب", callback_data='stats')
-    markup.add(btn1)
-    markup.row(btn2)
-
     today_str = date.today().isoformat()
     daily_status = "اليوم" if daily_date == today_str else "متأخر"
 
-    text = "🚀 Earn Pro
+    text = f"""🚀 Earn Pro
 
-"
-    text += f"نقاطك: {points}
-"
-    text += f"لفاتك: {spins}
-"
-    text += f"تسجيل يومي: {daily_status}
-"
-    text += f"دعوات: {invites}
+نقاطك: {points}
+لفاتك: {spins}
+تسجيل يومي: {daily_status}
+دعوات: {invites}
 
-اضغط على التطبيق لبدء الأرباح!"
+اضغط على التطبيق لبدء الأرباح!"""
+
+    markup = telebot.types.InlineKeyboardMarkup()
+    btn1 = telebot.types.InlineKeyboardButton("تطبيق الأرباح", web_app=telebot.types.WebAppInfo(url=MINI_APP_URL))
+    btn2 = telebot.types.InlineKeyboardButton("الحساب", callback_data='stats')
+    markup.add(btn1)
+    markup.row(btn2)
 
     bot.send_message(message.chat.id, text, reply_markup=markup)
 
@@ -108,18 +105,13 @@ def callback(call):
         today_str = date.today().isoformat()
         daily_status = "اليوم" if daily_date == today_str else "متأخر"
 
-        text = "📊 حسابك
+        text = f"""📊 حسابك
 
-"
-        text += f"النقاط: {points}
-"
-        text += f"اللفات: {spins}
-"
-        text += f"اليومي: {daily_status}
-"
-        text += f"الدعوات: {invites}
-"
-        text += "السحب: جاري المعالجة"
+النقاط: {points}
+اللفات: {spins}
+اليومي: {daily_status}
+الدعوات: {invites}
+السحب: جاري المعالجة"""
 
         bot.edit_message_text(text, call.message.chat.id, call.message.message_id)
 
@@ -177,16 +169,12 @@ def webapp_data(message):
         conn.commit()
         conn.close()
 
-        text = "📤 طلب السحب:
+        text = f"""📤 طلب السحب:
 
-"
-        text += f"المبلغ: {amount} نقطة
-"
-        text += f"الوسيلة: {wallet_type}
-"
-        text += f"الحساب: {wallet_num}
-"
-        text += "الحالة: مُعلَّق"
+المبلغ: {amount} نقطة
+الوسيلة: {wallet_type}
+الحساب: {wallet_num}
+الحالة: مُعلَّق"""
 
         bot.reply_to(message, text)
 
@@ -205,16 +193,13 @@ def admin_panel(message):
     pending = c.fetchall()
     conn.close()
 
-    text = "🔐 لوحة التحكم
+    text = f"""🔐 لوحة التحكم
 
-"
-    text += f"المستخدمين: {total_users}
-"
-    text += f"النقاط الكلية: {total_points}
+المستخدمين: {total_users}
+النقاط الكلية: {total_points}
 
-"
-    text += "طلبات السحب:
-"
+طلبات السحب:
+"""
     for w in pending:
         text += f"- {w[2]} نقاط → {w[3]} ({w[4]})
 "
