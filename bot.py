@@ -1,6 +1,6 @@
 """
-PROFIT BOT v2.1 - RAILWAY PRODUCTION FIXED
-F-String Syntax Error: RESOLVED
+PROFIT BOT v2.2 - RAILWAY CRASH FIXED
+GitHub + Railway + Mini App = PERFECT SYNC
 """
 
 import logging
@@ -8,23 +8,14 @@ import sqlite3
 from datetime import datetime, timedelta
 import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
-from telegram.ext import (
-    Application, CommandHandler, CallbackQueryHandler, 
-    ContextTypes, MessageHandler, filters
-)
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
-# ================= CONFIG =================
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', 
-    level=logging.INFO
-)
-
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 TOKEN = os.environ.get('BOT_TOKEN')
 ADMIN_IDS = [1103784347]
 DB = "profit_bot.db"
 MINI_APP_URL = "https://earn-mini-appuprailwayapp-production.up.railway.app/"
 
-# ================= DATABASE (Simplified for Railway) =================
 def init_db():
     conn = sqlite3.connect(DB, check_same_thread=False)
     c = conn.cursor()
@@ -41,7 +32,6 @@ def init_db():
                   request_date TEXT)''')
     conn.commit()
     conn.close()
-    logging.info("✅ قاعدة البيانات جاهزة")
 
 def get_user_points(user_id):
     conn = sqlite3.connect(DB, check_same_thread=False)
@@ -81,12 +71,10 @@ def add_checkin(user_id):
     conn.close()
     return streak
 
-# ================= START COMMAND =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
     
-    # تسجيل المستخدم
     conn = sqlite3.connect(DB, check_same_thread=False)
     c = conn.cursor()
     c.execute("INSERT OR IGNORE INTO users(user_id, username, first_name, joined_date, last_active) VALUES(?,?,?,?,?)",
@@ -96,6 +84,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn.close()
     
     points = get_user_points(user_id)
+    first_name = user.first_name or "مستخدم"
+    
+    # STRING آمن 100% - NO F-STRINGS
+    welcome_text = "🎉 أهلاً بك " + first_name + "! 🎉
+
+"
+    welcome_text += "💰 نقاطك الحالية: " + str(points) + " نقطة
+
+"
+    welcome_text += "📱 استخدم Mini App لكسب المزيد!
+"
+    welcome_text += "⚡ شاهد إعلانات | عجلة الحظ | مهام يومية"
     
     keyboard = [
         [InlineKeyboardButton("🚀 الدخول للـ Mini App", web_app=WebAppInfo(url=MINI_APP_URL))],
@@ -107,22 +107,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_id in ADMIN_IDS:
         keyboard.append([InlineKeyboardButton("⚙️ لوحة الإدارة", callback_data='admin_panel')])
     
-    # F-STRING المُصحح 100% ✅
-    welcome_text = (
-        "🎉 أهلاً بك " + (user.first_name or 'مستخدم') + "! 🎉
-
-"
-        "💰 نقاطك الحالية: " + str(points) + " نقطة
-
-"
-        "📱 استخدم Mini App لكسب المزيد!
-"
-        "⚡ شاهد إعلانات | عجلة الحظ | مهام يومية"
-    )
-    
     await update.message.reply_text(welcome_text, reply_markup=InlineKeyboardMarkup(keyboard))
 
-# ================= BUTTON CALLBACKS =================
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -137,16 +123,14 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             update_points(user_id, reward)
             points = get_user_points(user_id)
             
-            text = (
-                "✅ تم تسجيل الدخول اليومي!
+            text = "✅ تم تسجيل الدخول اليومي!
 
 "
-                f"🔥 سلسلة: {streak} يوم
+            text += "🔥 سلسلة: " + str(streak) + " يوم
 "
-                f"💰 حصلت على: {reward} نقطة
+            text += "💰 حصلت على: " + str(reward) + " نقطة
 "
-                f"📊 إجمالي نقاطك: {points}"
-            )
+            text += "📊 إجمالي نقاطك: " + str(points)
             await query.edit_message_text(text)
         else:
             await query.edit_message_text("❌ لقد سجلت الدخول اليوم بالفعل!
@@ -154,35 +138,38 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     elif data == 'balance':
         points = get_user_points(user_id)
-        await query.edit_message_text(f"💰 رصيدك الحالي: {points} نقطة
+        text = "💰 رصيدك الحالي: " + str(points) + " نقطة
 
-📌 الحد الأدنى للسحب: 100 نقطة")
+"
+        text += "📌 الحد الأدنى للسحب: 100 نقطة"
+        await query.edit_message_text(text)
     
     elif data == 'referral':
         bot_username = context.bot.username
-        ref_link = f"https://t.me/{bot_username}?start=ref_{user_id}"
-        text = (
-            "👥 نظام الدعوة:
+        ref_link = "https://t.me/" + bot_username + "?start=ref_" + str(user_id)
+        text = "👥 نظام الدعوة:
 
 "
-            f"🔗 رابطك: {ref_link}
+        text += "🔗 رابطك: " + ref_link + "
 
 "
-            "💰 ستحصل على 10% من أرباح المدعوين!"
-        )
+        text += "💰 ستحصل على 10% من أرباح المدعوين!"
         await query.edit_message_text(text)
     
     elif data == 'withdraw':
         points = get_user_points(user_id)
+        text = "💳 اختر طريقة السحب:
+
+"
+        text += "💰 رصيدك: " + str(points) + " نقطة
+"
+        text += "📌 الحد الأدنى: 100 نقطة"
+        
         keyboard = [
             [InlineKeyboardButton("💳 فاوصة", callback_data='withdraw_fawry')],
             [InlineKeyboardButton("💰 فودافون كاش", callback_data='withdraw_vodafone')],
             [InlineKeyboardButton("◀️ رجوع", callback_data='back')]
         ]
-        text = f"💳 اختر طريقة السحب:
-
-💰 رصيدك: {points} نقطة
-📌 الحد الأدنى: 100 نقطة"
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
     
     elif data == 'admin_panel' and user_id in ADMIN_IDS:
@@ -192,11 +179,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         total_users = c.fetchone()[0]
         conn.close()
         
-        await query.edit_message_text(f"⚙️ لوحة الإدارة
+        text = "⚙️ لوحة الإدارة
 
-👥 إجمالي المستخدمين: {total_users}")
+"
+        text += "👥 إجمالي المستخدمين: " + str(total_users)
+        await query.edit_message_text(text)
 
-# ================= WEBAPP DATA =================
 async def webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     data = update.message.text.strip()
@@ -210,11 +198,10 @@ async def webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             reward = int(data.split("_")[1])
             update_points(user_id, reward)
-            await update.message.reply_text(f"🎉 مبروك! حصلت على {reward} نقطة!")
+            await update.message.reply_text("🎉 مبروك! حصلت على " + str(reward) + " نقطة!")
         except:
             pass
 
-# ================= ADMIN =================
 async def admin_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS:
         return
@@ -229,15 +216,14 @@ async def admin_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 "
     for i, (uid, name, points) in enumerate(users, 1):
-        msg += f"{i}. {name} - {points} نقطة
+        msg += str(i) + ". " + name + " - " + str(points) + " نقطة
 "
     
     await update.message.reply_text(msg)
 
-# ================= MAIN =================
 def main():
     if not TOKEN:
-        logging.error("❌ BOT_TOKEN غير موجود")
+        print("❌ BOT_TOKEN غير موجود")
         return
     
     init_db()
@@ -248,7 +234,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), webapp_data))
     app.add_handler(CommandHandler("users", admin_users))
     
-    logging.info("🚀 PROFIT BOT v2.1 - RAILWAY PRODUCTION READY")
+    print("🚀 PROFIT BOT v2.2 - RAILWAY PRODUCTION READY")
     app.run_polling()
 
 if __name__ == "__main__":
