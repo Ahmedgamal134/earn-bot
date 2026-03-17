@@ -85,17 +85,16 @@ def start(message):
     today_str = date.today().isoformat()
     daily_status = "اليوم" if daily_date == today_str else "متأخر"
 
-    # ✅ هنا سطر واحد مقفول في `"`
+    # ✅ سطر واحد كامل، بدون أي string مقطوعة
     text = "💎 POINTS MASTER
-
 "
-    text += f"نقاطك: {points}
+    text += "نقاطك: " + str(points) + "
 "
-    text += f"لفاتك: {spins}
+    text += "لفاتك: " + str(spins) + "
 "
-    text += f"تسجيل يومي: {daily_status}
+    text += "تسجيل يومي: " + daily_status + "
 "
-    text += f"دعوات: {invites}
+    text += "دعوات: " + str(invites) + "
 
 "
     text += "اضغط على التطبيق لبدء الأرباح!"
@@ -120,13 +119,13 @@ def callback(call):
         text = "📊 حسابك
 
 "
-        text += f"النقاط: {points}
+        text += "النقاط: " + str(points) + "
 "
-        text += f"اللفات: {spins}
+        text += "اللفات: " + str(spins) + "
 "
-        text += f"اليومي: {daily_status}
+        text += "اليومي: " + daily_status + "
 "
-        text += f"الدعوات: {invites}
+        text += "الدعوات: " + str(invites) + "
 "
         text += "السحب: مُعلّق"
 
@@ -148,7 +147,7 @@ def webapp_data(message):
     elif data.startswith('wheel_'):
         reward = int(data.split('_')[1])
         update_points(user_id, reward)
-        bot.reply_to(message, f"🎉 عجلة الحظ! حصلت على {reward} نقطة!")
+        bot.reply_to(message, "🎉 عجلة الحظ! حصلت على " + str(reward) + " نقطة!")
 
     elif data == 'daily_checkin':
         today_str = date.today().isoformat()
@@ -190,11 +189,11 @@ def webapp_data(message):
         text = "📤 طلب السحب:
 
 "
-        text += f"المبلغ: {amount} نقطة
+        text += "المبلغ: " + str(amount) + " نقطة
 "
-        text += f"الوسيلة: {wallet_type}
+        text += "الوسيلة: " + wallet_type + "
 "
-        text += f"الحساب: {wallet_num}
+        text += "الحساب: " + wallet_num + "
 "
         text += "الحالة: مُعلّق"
 
@@ -219,15 +218,15 @@ def admin_panel(message):
     text = "🔐 لوحة التحكم
 
 "
-    text += f"المستخدمين: {total_users}
+    text += "المستخدمين: " + str(total_users) + "
 "
-    text += f"النقاط الكلية: {total_points}
+    text += "النقاط الكلية: " + str(total_points) + "
 
 "
     text += "طلبات السحب:
 "
     for w in pending:
-        text += f"- {w[2]} نقطة ← {w[3]} ({w[4]})
+        text += "- " + str(w[2]) + " نقطة ← " + w[3] + " (" + w[4] + ")
 "
 
     bot.reply_to(message, text)
