@@ -85,7 +85,7 @@ def start(message):
     today_str = date.today().isoformat()
     daily_status = "اليوم" if daily_date == today_str else "متأخر"
 
-    # ✅ سطر واحد كامل، بدون أي string مقطوعة
+    # ✅ هنا سطر واحد مقفول في `"`
     text = "💎 POINTS MASTER
 
 "
