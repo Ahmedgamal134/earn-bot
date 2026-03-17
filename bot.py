@@ -1,4 +1,3 @@
-import logging
 import sqlite3
 from datetime import datetime, timedelta
 import os
@@ -13,9 +12,9 @@ MINI_APP_URL = "https://earn-mini-appuprailwayapp-production.up.railway.app/"
 def init_db():
     conn = sqlite3.connect(DB, check_same_thread=False)
     c = conn.cursor()
-    c.execute('CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT, points INTEGER DEFAULT 0, total_earned INTEGER DEFAULT 0, joined_date TEXT, last_active TEXT)')
-    c.execute('CREATE TABLE IF NOT EXISTS daily_checkin (user_id INTEGER, check_date TEXT, streak INTEGER DEFAULT 1, UNIQUE(user_id, check_date))')
-    c.execute('CREATE TABLE IF NOT EXISTS withdrawals (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, amount INTEGER, wallet_type TEXT, status TEXT DEFAULT "قيد الانتظار", request_date TEXT)')
+    c.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT, points INTEGER DEFAULT 0, total_earned INTEGER DEFAULT 0, joined_date TEXT, last_active TEXT)")
+    c.execute("CREATE TABLE IF NOT EXISTS daily_checkin (user_id INTEGER, check_date TEXT, streak INTEGER DEFAULT 1, UNIQUE(user_id, check_date))")
+    c.execute("CREATE TABLE IF NOT EXISTS withdrawals (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, amount INTEGER, wallet_type TEXT, status TEXT DEFAULT 'قيد الانتظار', request_date TEXT)")
     conn.commit()
     conn.close()
 
@@ -67,17 +66,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn.close()
     
     points = get_user_points(user_id)
+    name = user.first_name or "مستخدم"
     
-    text1 = "🎉 اهلا بك "
-    text2 = user.first_name or "مستخدم"
-    text3 = "! 🎉"
-    welcome_text = text1 + text2 + text3 + "
+    msg = "🎉 اهلا بك " + name + "! 🎉
 
 "
-    welcome_text = welcome_text + "💰 نقاطك الحالية: " + str(points) + " نقطة
+    msg = msg + "نقاطك الحالية: " + str(points) + " نقطة
 
 "
-    welcome_text = welcome_text + "📱 استخدم Mini App لكسب المزيد!"
+    msg = msg + "استخدم Mini App لكسب المزيد!"
     
     keyboard = [
         [InlineKeyboardButton("🚀 الدخول للـ Mini App", web_app=WebAppInfo(url=MINI_APP_URL))],
@@ -87,7 +84,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_id in ADMIN_IDS:
         keyboard.append([InlineKeyboardButton("⚙️ لوحة الإدارة", callback_data='admin_panel')])
     
-    await update.message.reply_text(welcome_text, reply_markup=InlineKeyboardMarkup(keyboard))
+    await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -101,50 +98,52 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reward = 5 * streak
             update_points(user_id, reward)
             points = get_user_points(user_id)
-            text = "✅ تم تسجيل الدخول اليومي!
+            msg = "✅ تم تسجيل الدخول اليومي!
 
-🔥 سلسلة: "
-            text = text + str(streak) + " يوم
-💰 حصلت على: "
-            text = text + str(reward) + " نقطة
-📊 إجمالي نقاطك: "
-            text = text + str(points)
-            await query.edit_message_text(text)
+"
+            msg = msg + "🔥 سلسلة: " + str(streak) + " يوم
+"
+            msg = msg + "💰 حصلت على: " + str(reward) + " نقطة
+"
+            msg = msg + "📊 إجمالي نقاطك: " + str(points)
+            await query.edit_message_text(msg)
         else:
             await query.edit_message_text("❌ لقد سجلت الدخول اليوم بالفعل! ⏳ عد غداً.")
     
     elif data == 'balance':
         points = get_user_points(user_id)
-        text = "💰 رصيدك الحالي: " + str(points) + " نقطة"
-        text = text + "
+        msg = "💰 رصيدك الحالي: " + str(points) + " نقطة
 
-📌 الحد الأدنى للسحب: 100 نقطة"
-        await query.edit_message_text(text)
+"
+        msg = msg + "📌 الحد الأدنى للسحب: 100 نقطة"
+        await query.edit_message_text(msg)
     
     elif data == 'referral':
         bot_username = context.bot.username
         ref_link = "https://t.me/" + bot_username + "?start=ref_" + str(user_id)
-        text = "👥 نظام الدعوة:
+        msg = "👥 نظام الدعوة:
 
-🔗 رابطك: " + ref_link
-        text = text + "
+"
+        msg = msg + "🔗 رابطك: " + ref_link + "
 
-💰 ستحصل على 10% من أرباح المدعوين!"
-        await query.edit_message_text(text)
+"
+        msg = msg + "💰 ستحصل على 10% من أرباح المدعوين!"
+        await query.edit_message_text(msg)
     
     elif data == 'withdraw':
         points = get_user_points(user_id)
-        text = "💳 اختر طريقة السحب:
+        msg = "💳 اختر طريقة السحب:
 
-💰 رصيدك: "
-        text = text + str(points) + " نقطة
-📌 الحد الأدنى: 100 نقطة"
+"
+        msg = msg + "💰 رصيدك: " + str(points) + " نقطة
+"
+        msg = msg + "📌 الحد الأدنى: 100 نقطة"
         keyboard = [
             [InlineKeyboardButton("💳 فاوصة", callback_data='withdraw_fawry')],
             [InlineKeyboardButton("💰 فودافون كاش", callback_data='withdraw_vodafone')],
             [InlineKeyboardButton("◀️ رجوع", callback_data='back')]
         ]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+        await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -158,8 +157,7 @@ async def webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             reward = int(data.split("_")[1])
             update_points(user_id, reward)
-            msg = "🎉 مبروك! حصلت على " + str(reward) + " نقطة!"
-            await update.message.reply_text(msg)
+            await update.message.reply_text("🎉 مبروك! حصلت على " + str(reward) + " نقطة!")
         except:
             pass
 
@@ -181,7 +179,7 @@ async def admin_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     if not TOKEN:
-        print("❌ BOT_TOKEN غير موجود")
+        print("BOT_TOKEN غير موجود")
         return
     init_db()
     app = Application.builder().token(TOKEN).build()
@@ -189,7 +187,7 @@ def main():
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), webapp_data))
     app.add_handler(CommandHandler("users", admin_users))
-    print("🚀 PROFIT BOT v3.0 - RAILWAY BULLETPROOF")
+    print("PROFIT BOT v4.0 - RAILWAY READY")
     app.run_polling()
 
 if __name__ == "__main__":
