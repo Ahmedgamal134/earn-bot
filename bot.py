@@ -11,6 +11,7 @@ ADMIN_ID = 1103784347
 
 
 def init_db():
+    # تهيئة قاعدة البيانات
     conn = sqlite3.connect(DB, check_same_thread=False)
     c = conn.cursor()
     c.execute("""
@@ -37,6 +38,7 @@ def init_db():
 
 
 def get_user_stats(user_id):
+    # جلب بيانات المستخدم
     conn = sqlite3.connect(DB, check_same_thread=False)
     c = conn.cursor()
     c.execute(
@@ -85,6 +87,7 @@ def start(message):
     today_str = date.today().isoformat()
     daily_status = "اليوم" if daily_date == today_str else "متأخر"
 
+    # ❌ خطأ كان هنا: يجب أن تكون كل السلسلة مغلقة في نفس السطر
     text = "🚀 Earn Pro
 
 "
@@ -97,7 +100,7 @@ def start(message):
     text += f"دعوات: {invites}
 
 "
-    text += "اضغط على التطبيق لبدء الأرباح!."
+    text += "اضغط على التطبيق لبدء الأرباح!"
 
     markup = telebot.types.InlineKeyboardMarkup()
     btn1 = telebot.types.InlineKeyboardButton("تطبيق الأرباح", web_app=telebot.types.WebAppInfo(url=MINI_APP_URL))
