@@ -5,7 +5,6 @@ import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 TOKEN = os.environ.get('BOT_TOKEN')
 ADMIN_IDS = [1103784347]
 DB = "profit_bot.db"
@@ -14,9 +13,9 @@ MINI_APP_URL = "https://earn-mini-appuprailwayapp-production.up.railway.app/"
 def init_db():
     conn = sqlite3.connect(DB, check_same_thread=False)
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT, points INTEGER DEFAULT 0, total_earned INTEGER DEFAULT 0, joined_date TEXT, last_active TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS daily_checkin (user_id INTEGER, check_date TEXT, streak INTEGER DEFAULT 1, UNIQUE(user_id, check_date))''')
-    c.execute('''CREATE TABLE IF NOT EXISTS withdrawals (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, amount INTEGER, wallet_type TEXT, status TEXT DEFAULT 'قيد الانتظار', request_date TEXT)''')
+    c.execute('CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT, points INTEGER DEFAULT 0, total_earned INTEGER DEFAULT 0, joined_date TEXT, last_active TEXT)')
+    c.execute('CREATE TABLE IF NOT EXISTS daily_checkin (user_id INTEGER, check_date TEXT, streak INTEGER DEFAULT 1, UNIQUE(user_id, check_date))')
+    c.execute('CREATE TABLE IF NOT EXISTS withdrawals (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, amount INTEGER, wallet_type TEXT, status TEXT DEFAULT "قيد الانتظار", request_date TEXT)')
     conn.commit()
     conn.close()
 
@@ -68,17 +67,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn.close()
     
     points = get_user_points(user_id)
-    first_name = user.first_name or "مستخدم"
     
-    welcome_text = "🎉 اهلا بك " + first_name + "! 🎉
+    text1 = "🎉 اهلا بك "
+    text2 = user.first_name or "مستخدم"
+    text3 = "! 🎉"
+    welcome_text = text1 + text2 + text3 + "
 
 "
     welcome_text = welcome_text + "💰 نقاطك الحالية: " + str(points) + " نقطة
 
 "
-    welcome_text = welcome_text + "📱 استخدم Mini App لكسب المزيد!
-"
-    welcome_text = welcome_text + "⚡ شاهد إعلانات | عجلة الحظ | مهام يومية"
+    welcome_text = welcome_text + "📱 استخدم Mini App لكسب المزيد!"
     
     keyboard = [
         [InlineKeyboardButton("🚀 الدخول للـ Mini App", web_app=WebAppInfo(url=MINI_APP_URL))],
@@ -104,23 +103,22 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             points = get_user_points(user_id)
             text = "✅ تم تسجيل الدخول اليومي!
 
-"
-            text = text + "🔥 سلسلة: " + str(streak) + " يوم
-"
-            text = text + "💰 حصلت على: " + str(reward) + " نقطة
-"
-            text = text + "📊 إجمالي نقاطك: " + str(points)
+🔥 سلسلة: "
+            text = text + str(streak) + " يوم
+💰 حصلت على: "
+            text = text + str(reward) + " نقطة
+📊 إجمالي نقاطك: "
+            text = text + str(points)
             await query.edit_message_text(text)
         else:
-            await query.edit_message_text("❌ لقد سجلت الدخول اليوم بالفعل!
-⏳ عد غداً.")
+            await query.edit_message_text("❌ لقد سجلت الدخول اليوم بالفعل! ⏳ عد غداً.")
     
     elif data == 'balance':
         points = get_user_points(user_id)
-        text = "💰 رصيدك الحالي: " + str(points) + " نقطة
+        text = "💰 رصيدك الحالي: " + str(points) + " نقطة"
+        text = text + "
 
-"
-        text = text + "📌 الحد الأدنى للسحب: 100 نقطة"
+📌 الحد الأدنى للسحب: 100 نقطة"
         await query.edit_message_text(text)
     
     elif data == 'referral':
@@ -128,21 +126,19 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ref_link = "https://t.me/" + bot_username + "?start=ref_" + str(user_id)
         text = "👥 نظام الدعوة:
 
-"
-        text = text + "🔗 رابطك: " + ref_link + "
+🔗 رابطك: " + ref_link
+        text = text + "
 
-"
-        text = text + "💰 ستحصل على 10% من أرباح المدعوين!"
+💰 ستحصل على 10% من أرباح المدعوين!"
         await query.edit_message_text(text)
     
     elif data == 'withdraw':
         points = get_user_points(user_id)
         text = "💳 اختر طريقة السحب:
 
-"
-        text = text + "💰 رصيدك: " + str(points) + " نقطة
-"
-        text = text + "📌 الحد الأدنى: 100 نقطة"
+💰 رصيدك: "
+        text = text + str(points) + " نقطة
+📌 الحد الأدنى: 100 نقطة"
         keyboard = [
             [InlineKeyboardButton("💳 فاوصة", callback_data='withdraw_fawry')],
             [InlineKeyboardButton("💰 فودافون كاش", callback_data='withdraw_vodafone')],
@@ -156,14 +152,14 @@ async def webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if data.startswith("watch_ad"):
         update_points(user_id, 5)
-        await update.message.reply_text("✅ شكراً لمشاهدتك الإعلان!
-💰 تم إضافة 5 نقاط لرصيدك!")
+        await update.message.reply_text("✅ شكراً لمشاهدتك الإعلان! 💰 تم إضافة 5 نقاط لرصيدك!")
     
     elif data.startswith("wheel_"):
         try:
             reward = int(data.split("_")[1])
             update_points(user_id, reward)
-            await update.message.reply_text("🎉 مبروك! حصلت على " + str(reward) + " نقطة!")
+            msg = "🎉 مبروك! حصلت على " + str(reward) + " نقطة!"
+            await update.message.reply_text(msg)
         except:
             pass
 
@@ -179,7 +175,7 @@ async def admin_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 "
     for i, (uid, name, points) in enumerate(users, 1):
-        msg = msg + str(i) + ". " + name + " - " + str(points) + " نقطة
+        msg = msg + str(i) + ". " + str(name) + " - " + str(points) + " نقطة
 "
     await update.message.reply_text(msg)
 
@@ -193,7 +189,7 @@ def main():
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), webapp_data))
     app.add_handler(CommandHandler("users", admin_users))
-    print("🚀 PROFIT BOT v2.3 - RAILWAY READY")
+    print("🚀 PROFIT BOT v3.0 - RAILWAY BULLETPROOF")
     app.run_polling()
 
 if __name__ == "__main__":
