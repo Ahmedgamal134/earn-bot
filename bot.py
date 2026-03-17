@@ -117,7 +117,7 @@ def callback(call):
 اللفات: {spins}
 اليومي: {daily_status}
 الدعوات: {invites}
-السحب: معيّل"""
+السحب: مُعلّق"""
 
         bot.edit_message_text(text, call.message.chat.id, call.message.message_id)
 
@@ -181,7 +181,7 @@ def webapp_data(message):
 المبلغ: {amount} نقطة
 الوسيلة: {wallet_type}
 الحساب: {wallet_num}
-الحالة: مُعلَّق"""
+الحالة: مُعلّق"""
 
         bot.reply_to(message, text)
 
@@ -212,6 +212,7 @@ def admin_panel(message):
     text += "طلبات السحب:
 "
     for w in pending:
+        # تأكد إن كل f-string مقفلة وسليمة:
         text += f"- {w[2]} نقطة ← {w[3]} ({w[4]})
 "
 
