@@ -1,14 +1,12 @@
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler
 import sqlite3
 from datetime import datetime
-import logging
 import os
+from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 TOKEN = os.environ.get('BOT_TOKEN')
 DB = "profit_bot.db"
 MINI_APP_URL = "https://earn-mini-appuprailwayapp-production.up.railway.app/"
-
-logging.basicConfig(level=logging.INFO)
 
 def init_db():
     conn = sqlite3.connect(DB, check_same_thread=False)
@@ -55,16 +53,15 @@ def start(update, context):
     user_id = update.message.from_user.id
     points = get_points(user_id)
     
-    msg = "Welcome! Points: " + str(points)
     keyboard = [
         [InlineKeyboardButton("Mini App", web_app=WebAppInfo(url=MINI_APP_URL))],
         [InlineKeyboardButton("Daily Check", callback_data='daily')],
-        [InlineKeyboardButton("Balance", callback_data='balance')]
+        [InlineKeyboardButton("My Balance", callback_data='balance')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    update.message.reply_text(msg, reply_markup=reply_markup)
+    update.message.reply_text("Welcome! Points: " + str(points), reply_markup=reply_markup)
 
-def button(update, context):
+def button_callback(update, context):
     query = update.callback_query
     query.answer()
     user_id = query.from_user.id
@@ -75,46 +72,45 @@ def button(update, context):
             do_checkin(user_id)
             add_points(user_id, 5)
             points = get_points(user_id)
-            msg = "Daily OK! +5 points. Total: " + str(points)
+            query.edit_message_text("Daily check OK! +5 points. Total: " + str(points))
         else:
-            msg = "Daily already done"
-        query.edit_message_text(msg)
+            query.edit_message_text("Daily check already done today")
     
     elif data == 'balance':
         points = get_points(user_id)
-        msg = "Balance: " + str(points) + " points"
-        query.edit_message_text(msg)
+        query.edit_message_text("Your balance: " + str(points) + " points")
 
-def webapp(update, context):
+def handle_message(update, context):
     user_id = update.message.from_user.id
     data = update.message.text
     
     if "watch_ad" in data:
         add_points(user_id, 5)
-        update.message.reply_text("Ad OK +5 points")
+        update.message.reply_text("Ad watched! +5 points")
     
     elif "wheel_" in data:
         try:
-            reward = int(data.split("_")[1])
+            parts = data.split("_")
+            reward = int(parts[1])
             add_points(user_id, reward)
-            update.message.reply_text("Wheel + " + str(reward))
+            update.message.reply_text("Wheel win! +" + str(reward) + " points")
         except:
             pass
 
 def main():
     if not TOKEN:
-        print("No TOKEN")
+        print("No BOT_TOKEN found")
         return
     
     init_db()
-    updater = Updater(TOKEN, use_context=True)
+    updater = Updater(token=TOKEN, use_context=True)
     dp = updater.dispatcher
     
     dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CallbackQueryHandler(button))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, webapp))
+    dp.add_handler(CallbackQueryHandler(button_callback))
+    dp.add_handler(MessageHandler(None, handle_message))
     
-    print("Bot running")
+    print("Bot started successfully!")
     updater.start_polling()
     updater.idle()
 
