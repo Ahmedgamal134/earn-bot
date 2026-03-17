@@ -85,7 +85,7 @@ def start(message):
     today_str = date.today().isoformat()
     daily_status = "اليوم" if daily_date == today_str else "متأخر"
 
-    # ✅ نسخة نظيفة، كل سطر فيه " مغلقة في نفس السطر
+    # ✅ سطر واحد كامل، بدون أي string مقطوعة
     text = "💎 POINTS MASTER
 
 "
@@ -143,7 +143,7 @@ def webapp_data(message):
     if data == 'watch_ad':
         update_points(user_id, 5)
         update_spins(user_id, 2)
-        bot.reply_to(message, "🇪🇸 إعلان ناجح! +5 نقاط +2 لفة")
+        bot.reply_to(message, "إعلان ناجح! +5 نقاط +2 لفة")
 
     elif data.startswith('wheel_'):
         reward = int(data.split('_')[1])
@@ -155,13 +155,13 @@ def webapp_data(message):
         if daily_date != today_str:
             set_daily_checkin(user_id)
             update_points(user_id, 10)
-            bot.reply_to(message, "📅 تسجيل يومي ناجح! +10 نقاط")
+            bot.reply_to(message, "تسجيل يومي ناجح! +10 نقاط")
         else:
             bot.reply_to(message, "لقد سجّلت اليوم بالفعل.")
 
     elif data == 'invite':
         update_points(user_id, 15)
-        bot.reply_to(message, "👥 دعوة جديدة! +15 نقطة")
+        bot.reply_to(message, "دعوة جديدة! +15 نقطة")
 
     elif data.startswith('withdraw_'):
         parts = data.split('_')
