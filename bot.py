@@ -3,7 +3,6 @@ import sqlite3
 from datetime import datetime, date
 import os
 
-# TOKEN مخفي - يجي من Railway Variables
 TOKEN = os.environ.get('BOT_TOKEN')
 bot = telebot.TeleBot(TOKEN)
 DB = "profit_bot.db"
@@ -58,22 +57,28 @@ def start(message):
     points,spins,daily_date,invites = get_user_stats(user_id)
     
     markup = telebot.types.InlineKeyboardMarkup()
-    btn1 = telebot.types.InlineKeyboardButton("🚀 التطبيق",web_app=telebot.types.WebAppInfo(url=MINI_APP_URL))
-    btn2 = telebot.types.InlineKeyboardButton("💰 الحساب",callback_data='stats')
+    btn1 = telebot.types.InlineKeyboardButton("التطبيق",web_app=telebot.types.WebAppInfo(url=MINI_APP_URL))
+    btn2 = telebot.types.InlineKeyboardButton("الحساب",callback_data='stats')
     markup.add(btn1)
     markup.row(btn2)
     
     today_str = date.today().isoformat()
-    daily_status = "✅ اليوم" if daily_date == today_str else "❌ متاح"
+    daily_status = "اليوم" if daily_date == today_str else "متاح"
     
-    bot.send_message(message.chat.id,f"""🎉 Earn Pro
+    text = "Earn Pro
 
-💎 نقاطك: {points}
-🎰 لفاتك: {spins}
-📅 يومي: {daily_status}
-👥 دعوات: {invites}
+"
+    text = text + "نقاطك: " + str(points) + "
+"
+    text = text + "لفاتك: " + str(spins) + "
+"
+    text = text + "يومي: " + daily_status + "
+"
+    text = text + "دعوات: " + str(invites) + "
 
-🚀 ابدأ الكسب!""",reply_markup=markup)
+ابدأ الكسب!"
+    
+    bot.send_message(message.chat.id,text,reply_markup=markup)
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback(call):
@@ -81,15 +86,22 @@ def callback(call):
         user_id = call.from_user.id
         points,spins,daily_date,invites = get_user_stats(user_id)
         today_str = date.today().isoformat()
-        daily_status = "✅ اليوم" if daily_date == today_str else "❌ متاح"
+        daily_status = "اليوم" if daily_date == today_str else "متاح"
         
-        bot.edit_message_text(f"""📊 حسابك:
+        text = "حسابك:
 
-💎 النقاط: {points}
-🎰 اللفات: {spins}
-📅 اليومي: {daily_status}
-👥 الدعوات: {invites}
-💳 السحب: قيد الانتظار""",call.message.chat.id,call.message.message_id)
+"
+        text = text + "النقاط: " + str(points) + "
+"
+        text = text + "اللفات: " + str(spins) + "
+"
+        text = text + "اليومي: " + daily_status + "
+"
+        text = text + "الدعوات: " + str(invites) + "
+"
+        text = text + "السحب: قيد الانتظار"
+        
+        bot.edit_message_text(text,call.message.chat.id,call.message.message_id)
 
 @bot.message_handler(func=lambda m: True)
 def webapp_data(message):
@@ -99,17 +111,13 @@ def webapp_data(message):
     if data == 'watch_ad':
         update_points(user_id,5)
         update_spins(user_id,2)
-        bot.reply_to(message,"✅ إعلان تم!
-💎 +5 نقطة
-🎰 +2 لفة مجانية")
+        bot.reply_to(message,"اعلان تم! +5 نقطة +2 لفة")
     
     elif data.startswith('wheel_'):
-        try:
-            reward = int(data.split('_')[1])
-            update_points(user_id,reward)
-            bot.reply_to(message,f"🎉 فزت بـ {reward} نقطة! 🎰")
-        except:
-            pass
+        reward = int(data.split('_')[1])
+        update_points(user_id,reward)
+        reward_text = str(reward) + " نقطة!"
+        bot.reply_to(message,"عجلة الحظ! فزت بـ " + reward_text)
     
     elif data == 'daily_checkin':
         points,spins,daily_date,invites = get_user_stats(user_id)
@@ -117,36 +125,38 @@ def webapp_data(message):
         if daily_date != today_str:
             set_daily_checkin(user_id)
             update_points(user_id,10)
-            bot.reply_to(message,"✅ تسجيل يومي!
-💎 +10 نقطة يومياً")
+            bot.reply_to(message,"تسجيل يومي! +10 نقطة")
         else:
-            bot.reply_to(message,"❌ سبق تسجيلك اليوم!")
+            bot.reply_to(message,"سجلت اليوم بالفعل!")
     
     elif data == 'invite':
         update_points(user_id,15)
-        bot.reply_to(message,"👥 دعوة مسجلة!
-💎 +15 نقطة فوراً")
+        bot.reply_to(message,"دعوة مسجلة! +15 نقطة")
     
     elif data.startswith('withdraw_'):
         parts = data.split('_')
-        if len(parts) >= 4:
-            wallet_type = parts[1]
-            wallet_num = parts[2]
-            amount = int(parts[3])
-            
-            conn = sqlite3.connect(DB, check_same_thread=False)
-            c = conn.cursor()
-            c.execute("INSERT INTO withdrawals(user_id,amount,wallet_type,wallet_number) VALUES(?,?,?,?)",(user_id,amount,wallet_type,wallet_num))
-            c.execute("UPDATE users SET points = points - ? WHERE user_id = ?",(amount,user_id))
-            conn.commit()
-            conn.close()
-            
-            bot.reply_to(message,f"""💳 طلب سحب جديد ✅
+        wallet_type = parts[1]
+        wallet_num = parts[2]
+        amount = int(parts[3])
+        
+        conn = sqlite3.connect(DB, check_same_thread=False)
+        c = conn.cursor()
+        c.execute("INSERT INTO withdrawals(user_id,amount,wallet_type,wallet_number) VALUES(?,?,?,?)",(user_id,amount,wallet_type,wallet_num))
+        c.execute("UPDATE users SET points = points - ? WHERE user_id = ?",(amount,user_id))
+        conn.commit()
+        conn.close()
+        
+        text = "طلب سحب:
 
-💰 المبلغ: {amount} نقطة
-💳 الطريقة: {wallet_type}
-📱 الحساب: {wallet_num}
-⏳ الحالة: قيد الانتظار""")
+"
+        text = text + "المبلغ: " + str(amount) + " نقطة
+"
+        text = text + "الطريقة: " + wallet_type + "
+"
+        text = text + "الحساب: " + wallet_num + "
+"
+        text = text + "قيد الانتظار"
+        bot.reply_to(message,text)
 
 @bot.message_handler(commands=['admin'])
 def admin_panel(message):
@@ -163,20 +173,23 @@ def admin_panel(message):
     pending = c.fetchall()
     conn.close()
     
-    text = f"""👨‍💼 لوحة التحكم
+    text = "لوحة التحكم
 
-👥 المستخدمين: {total_users}
-💎 النقاط الكلية: {total_points}
+"
+    text = text + "المستخدمين: " + str(total_users) + "
+"
+    text = text + "النقاط: " + str(total_points) + "
 
-📋 طلبات السحب المعلقة:
-"""
+"
+    text = text + "طلبات السحب:
+"
     for w in pending:
-        text += f"• {w[2]} نقطة - {w[3]}
+        text = text + "- " + str(w[2]) + " " + w[3] + "
 "
     
     bot.reply_to(message,text)
 
 if __name__ == '__main__':
     init_db()
-    print("🚀 Earn Bot شغال!")
+    print("البوت شغال!")
     bot.infinity_polling()
