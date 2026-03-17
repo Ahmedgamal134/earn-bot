@@ -1,10 +1,10 @@
+import telebot
 import sqlite3
 from datetime import datetime
 import os
-from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 TOKEN = os.environ.get('BOT_TOKEN')
+bot = telebot.TeleBot(TOKEN)
 DB = "profit_bot.db"
 MINI_APP_URL = "https://earn-mini-appuprailwayapp-production.up.railway.app/"
 
@@ -49,70 +49,61 @@ def do_checkin(user_id):
     conn.commit()
     conn.close()
 
-def start(update, context):
-    user_id = update.message.from_user.id
+@bot.message_handler(commands=['start'])
+def start(message):
+    user_id = message.from_user.id
     points = get_points(user_id)
     
-    keyboard = [
-        [InlineKeyboardButton("Mini App", web_app=WebAppInfo(url=MINI_APP_URL))],
-        [InlineKeyboardButton("Daily Check", callback_data='daily')],
-        [InlineKeyboardButton("My Balance", callback_data='balance')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    update.message.reply_text("Welcome! Points: " + str(points), reply_markup=reply_markup)
+    markup = telebot.types.InlineKeyboardMarkup()
+    btn1 = telebot.types.InlineKeyboardButton("🚀 Mini App", web_app=telebot.types.WebAppInfo(url=MINI_APP_URL))
+    btn2 = telebot.types.InlineKeyboardButton("✅ Daily Check", callback_data='daily')
+    btn3 = telebot.types.InlineKeyboardButton("💰 Balance", callback_data='balance')
+    
+    markup.add(btn1, btn2, btn3)
+    bot.send_message(message.chat.id, "Welcome! Points: " + str(points), reply_markup=markup)
 
-def button_callback(update, context):
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
-    data = query.data
+@bot.callback_query_handler(func=lambda call: True)
+def callback(call):
+    user_id = call.from_user.id
+    data = call.data
     
     if data == 'daily':
         if can_checkin(user_id):
             do_checkin(user_id)
             add_points(user_id, 5)
             points = get_points(user_id)
-            query.edit_message_text("Daily check OK! +5 points. Total: " + str(points))
+            bot.answer_callback_query(call.id, "Daily OK! +5 points")
+            bot.edit_message_text("Daily check OK! +5 points. Total: " + str(points), call.message.chat.id, call.message.message_id)
         else:
-            query.edit_message_text("Daily check already done today")
+            bot.answer_callback_query(call.id, "Already done today")
+            bot.edit_message_text("Daily check already done today", call.message.chat.id, call.message.message_id)
     
     elif data == 'balance':
         points = get_points(user_id)
-        query.edit_message_text("Your balance: " + str(points) + " points")
+        bot.answer_callback_query(call.id)
+        bot.edit_message_text("Your balance: " + str(points) + " points", call.message.chat.id, call.message.message_id)
 
-def handle_message(update, context):
-    user_id = update.message.from_user.id
-    data = update.message.text
+@bot.message_handler(func=lambda message: True)
+def handle_all(message):
+    user_id = message.from_user.id
+    data = message.text
     
     if "watch_ad" in data:
         add_points(user_id, 5)
-        update.message.reply_text("Ad watched! +5 points")
+        bot.reply_to(message, "Ad watched! +5 points")
     
     elif "wheel_" in data:
         try:
-            parts = data.split("_")
-            reward = int(parts[1])
+            reward = int(data.split("_")[1])
             add_points(user_id, reward)
-            update.message.reply_text("Wheel win! +" + str(reward) + " points")
+            bot.reply_to(message, "Wheel win! +" + str(reward) + " points")
         except:
             pass
 
-def main():
+if __name__ == '__main__':
     if not TOKEN:
-        print("No BOT_TOKEN found")
-        return
-    
-    init_db()
-    updater = Updater(token=TOKEN, use_context=True)
-    dp = updater.dispatcher
-    
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CallbackQueryHandler(button_callback))
-    dp.add_handler(MessageHandler(None, handle_message))
-    
-    print("Bot started successfully!")
-    updater.start_polling()
-    updater.idle()
-
-if __name__ == "__main__":
-    main()
+        print("No BOT_TOKEN")
+    else:
+        init_db()
+        print("Bot starting...")
+        bot.polling(none_stop=True)
