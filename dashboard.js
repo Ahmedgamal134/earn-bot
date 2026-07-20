@@ -1,7 +1,7 @@
 const fs = require('fs');
 const express = require('express');
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.get('/dashboard', (req, res) => {
   const data = JSON.parse(fs.readFileSync('users.json'));
@@ -9,5 +9,5 @@ app.get('/dashboard', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Dashboard شغال على http://localhost:${PORT}/dashboard`);
+  console.log(`Dashboard شغال على المنفذ ${PORT}`);
 });
