@@ -1,13 +1,16 @@
-require('dotenv').config();
-const TelegramBot = require('node-telegram-bot-api');
+// تحميل المكتبات
+const TelegramBot = require('node-telegram-bot-api').default;
 const fs = require('fs');
 const express = require('express');
+require('dotenv').config();
+
 const app = express();
 
-// التوكن من متغير البيئة
+// قراءة التوكن من متغير البيئة
 const token = process.env.BOT_TOKEN;
 const bot = new TelegramBot(token, { polling: true });
 
+// تحميل المستخدمين من الملف
 let users = [];
 try {
   users = JSON.parse(fs.readFileSync('users.json'));
@@ -15,6 +18,7 @@ try {
   users = [];
 }
 
+// حفظ المستخدمين
 function saveUsers() {
   fs.writeFileSync('users.json', JSON.stringify(users, null, 2));
 }
@@ -50,5 +54,5 @@ app.get('/dashboard', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Dashboard شغال على المنفذ ${PORT}`);
+  console.log(`✅ Dashboard شغال على المنفذ ${PORT}`);
 });
